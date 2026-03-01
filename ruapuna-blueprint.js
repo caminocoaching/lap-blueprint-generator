@@ -41,7 +41,7 @@ const RuapunaBlueprint = {
         {
             number: 1,
             name: 'Section 1',
-            direction: 'right',
+            direction: 'left',
             type: 'medium',
             severity: 'medium',
             title: '',

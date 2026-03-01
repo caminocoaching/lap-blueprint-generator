@@ -1,0 +1,7 @@
+.streamlit/secrets.toml
+__pycache__/
+*.pyc
+data/blueprints/*.json
+*.mp4
+*.tmp
+.env
