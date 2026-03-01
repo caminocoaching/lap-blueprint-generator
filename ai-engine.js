@@ -19,13 +19,13 @@ const AIEngine = {
     openaiApiKey: null,
 
     // ── Model Selection ─────────────────────────────────────
-    geminiModel: 'gemini-2.0-flash',
+    geminiModel: 'gemini-2.5-flash',
     claudeModel: 'claude-sonnet-4-5-20250929',
     blueprintProvider: 'claude',  // 'claude' | 'gemini' | 'demo'
 
     GEMINI_MODELS: {
-        'gemini-2.0-flash': 'Gemini 2.0 Flash (Fast)',
-        'gemini-2.0-flash-lite': 'Gemini 2.0 Flash-Lite (Fastest)',
+        'gemini-2.5-flash': 'Gemini 2.5 Flash (Recommended)',
+        'gemini-2.5-flash-lite': 'Gemini 2.5 Flash-Lite (Fastest)',
         'gemini-2.5-pro': 'Gemini 2.5 Pro (Best)'
     },
 
@@ -47,7 +47,7 @@ const AIEngine = {
         this.geminiApiKey = localStorage.getItem('lb_gemini_key') || localStorage.getItem('lb_api_key') || null;
         this.claudeApiKey = localStorage.getItem('lb_claude_key') || null;
         this.openaiApiKey = localStorage.getItem('lb_openai_key') || null;
-        this.geminiModel = localStorage.getItem('lb_gemini_model') || 'gemini-2.0-flash';
+        this.geminiModel = localStorage.getItem('lb_gemini_model') || 'gemini-2.5-flash';
         this.claudeModel = localStorage.getItem('lb_claude_model') || 'claude-sonnet-4-5-20250929';
         this.blueprintProvider = localStorage.getItem('lb_blueprint_provider') || 'claude';
     },
@@ -656,6 +656,315 @@ If the guide warns about specific hazards (ripple strips, concrete walls, no run
 
 
     // ============================================================
+    //  GEMINI VIDEO ANALYSIS — Full Video Upload (Forward Pass)
+    //  Uploads complete lap video to Gemini 2.5 Pro for automated
+    //  corner detection with timestamps and visual references
+    // ============================================================
+
+    /**
+     * Upload a video file to Gemini Files API and return the file URI.
+     * @param {File} videoFile — the video file to upload
+     * @param {Function} onProgress — (pct, message) callback
+     * @returns {Object} { fileUri, mimeType } for use in generateContent
+     */
+    async _uploadVideoToGemini(videoFile, onProgress) {
+        if (!this.geminiApiKey) {
+            throw new Error('Gemini API key not configured. Set your key in Settings.');
+        }
+
+        if (onProgress) onProgress(5, `Uploading ${(videoFile.size / (1024 * 1024)).toFixed(1)}MB video to Gemini...`);
+
+        // Step 1: Start resumable upload
+        const startUrl = `https://generativelanguage.googleapis.com/upload/v1beta/files?key=${this.geminiApiKey}`;
+        const startResponse = await fetch(startUrl, {
+            method: 'POST',
+            headers: {
+                'X-Goog-Upload-Protocol': 'resumable',
+                'X-Goog-Upload-Command': 'start',
+                'X-Goog-Upload-Header-Content-Length': videoFile.size,
+                'X-Goog-Upload-Header-Content-Type': videoFile.type || 'video/mp4',
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({
+                file: {
+                    display_name: videoFile.name || 'lap-video'
+                }
+            })
+        });
+
+        if (!startResponse.ok) {
+            const err = await startResponse.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Gemini upload start failed: ${startResponse.status}`);
+        }
+
+        const uploadUrl = startResponse.headers.get('X-Goog-Upload-URL');
+        if (!uploadUrl) throw new Error('No upload URL returned from Gemini Files API');
+
+        // Step 2: Upload the file bytes
+        if (onProgress) onProgress(15, 'Sending video data...');
+
+        const uploadResponse = await fetch(uploadUrl, {
+            method: 'PUT',
+            headers: {
+                'Content-Length': videoFile.size,
+                'X-Goog-Upload-Offset': '0',
+                'X-Goog-Upload-Command': 'upload, finalize'
+            },
+            body: videoFile
+        });
+
+        if (!uploadResponse.ok) {
+            const err = await uploadResponse.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Gemini upload failed: ${uploadResponse.status}`);
+        }
+
+        const uploadResult = await uploadResponse.json();
+        const fileName = uploadResult.file?.name;
+        if (!fileName) throw new Error('No file name returned from Gemini upload');
+
+        // Step 3: Poll for processing to complete
+        if (onProgress) onProgress(30, 'Gemini processing video...');
+
+        let fileUri = uploadResult.file?.uri;
+        let state = uploadResult.file?.state;
+        let pollCount = 0;
+        const maxPolls = 120; // 10 minutes max (5s intervals)
+
+        while (state === 'PROCESSING' && pollCount < maxPolls) {
+            await new Promise(r => setTimeout(r, 5000));
+            pollCount++;
+
+            const pct = Math.min(30 + (pollCount / maxPolls) * 30, 58);
+            if (onProgress) onProgress(pct, `Gemini processing video... (${pollCount * 5}s)`);
+
+            const checkUrl = `https://generativelanguage.googleapis.com/v1beta/${fileName}?key=${this.geminiApiKey}`;
+            const checkResponse = await fetch(checkUrl);
+            if (!checkResponse.ok) continue;
+
+            const checkResult = await checkResponse.json();
+            state = checkResult.state;
+            fileUri = checkResult.uri;
+        }
+
+        if (state === 'PROCESSING') {
+            throw new Error('Video processing timed out. Try a shorter or smaller video.');
+        }
+        if (state === 'FAILED') {
+            throw new Error('Gemini failed to process video. Try a different format (MP4 recommended).');
+        }
+
+        if (onProgress) onProgress(60, 'Video ready for analysis');
+
+        return {
+            fileUri: fileUri,
+            mimeType: videoFile.type || 'video/mp4',
+            fileName: fileName
+        };
+    },
+
+    /**
+     * Analyze an uploaded lap video using Gemini 2.5 Pro to detect all corners
+     * with timestamps, visual references, and confidence scores.
+     * This is the FORWARD PASS from Craig's 14-step pipeline (Step 3).
+     *
+     * @param {File} videoFile — the trimmed lap video file
+     * @param {Object} options — { trackName, vehicleType, lapStart, lapEnd }
+     * @param {Function} onProgress — (pct, message) callback
+     * @returns {Object} { corners: [...], lapDuration, trackEstimate }
+     */
+    async analyzeVideoForward(videoFile, options = {}, onProgress) {
+        const { trackName, vehicleType, lapStart, lapEnd } = options;
+
+        if (onProgress) onProgress(2, 'Starting forward pass video analysis...');
+
+        // Upload video to Gemini
+        const uploaded = await this._uploadVideoToGemini(videoFile, (pct, msg) => {
+            // Scale upload progress to 0-60%
+            if (onProgress) onProgress(Math.round(pct * 0.6), msg);
+        });
+
+        if (onProgress) onProgress(62, 'Analysing video for corners...');
+
+        // Build the forward pass prompt
+        const prompt = this._buildForwardPassPrompt(trackName, vehicleType, lapStart, lapEnd);
+
+        // Call Gemini 2.5 Pro with the uploaded video
+        const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${this.geminiApiKey}`;
+
+        const response = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+                contents: [{
+                    parts: [
+                        {
+                            fileData: {
+                                mimeType: uploaded.mimeType,
+                                fileUri: uploaded.fileUri
+                            }
+                        },
+                        { text: prompt }
+                    ]
+                }],
+                generationConfig: {
+                    temperature: 0.1,
+                    maxOutputTokens: 16384
+                }
+            })
+        });
+
+        if (onProgress) onProgress(85, 'Processing corner detection results...');
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Gemini API Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const rawText = data.candidates?.[0]?.content?.parts?.[0]?.text;
+        if (!rawText) throw new Error('Empty response from Gemini video analysis.');
+
+        // Parse JSON response
+        let jsonStr = rawText.trim();
+        if (jsonStr.startsWith('```json')) {
+            jsonStr = jsonStr.replace(/^```json\s*/, '').replace(/\s*```$/, '');
+        } else if (jsonStr.startsWith('```')) {
+            jsonStr = jsonStr.replace(/^```\s*/, '').replace(/\s*```$/, '');
+        }
+
+        let result;
+        try {
+            result = JSON.parse(jsonStr);
+        } catch (e) {
+            const jsonMatch = rawText.match(/\{[\s\S]*\}/);
+            if (jsonMatch) {
+                result = JSON.parse(jsonMatch[0]);
+            } else {
+                console.error('[AIEngine] Failed to parse forward pass response:', rawText.substring(0, 500));
+                throw new Error('Could not parse video analysis data. Try again.');
+            }
+        }
+
+        // Clean up the uploaded file (fire and forget)
+        try {
+            await fetch(`https://generativelanguage.googleapis.com/v1beta/${uploaded.fileName}?key=${this.geminiApiKey}`, {
+                method: 'DELETE'
+            });
+        } catch (e) { /* non-critical */ }
+
+        if (onProgress) onProgress(100, `Forward pass complete — ${result.corners?.length || 0} corners detected`);
+
+        return result;
+    },
+
+    /**
+     * Build the forward pass corner detection prompt.
+     * Gemini watches the video and identifies every corner with timestamps.
+     */
+    _buildForwardPassPrompt(trackName, vehicleType, lapStart, lapEnd) {
+        const timeContext = (lapStart != null && lapEnd != null)
+            ? `\nThe lap runs from ${lapStart.toFixed(1)}s to ${lapEnd.toFixed(1)}s in the video. Only analyse this segment.`
+            : '';
+
+        const trackContext = trackName
+            ? `\nThis is onboard footage from "${trackName}".`
+            : '\nThe track name is unknown — identify it if possible from visual cues.';
+
+        const vehicleContext = vehicleType
+            ? `\nVehicle type: ${vehicleType}.`
+            : '';
+
+        return `You are a visual target analyst for a gaze conditioning system used by racing drivers and riders.
+
+You are NOT analysing driving technique. You are identifying VISUAL TARGETS — the specific objects, markers, and reference points that are visible in the onboard footage at critical moments around each corner.
+${trackContext}${vehicleContext}${timeContext}
+
+Watch this onboard lap video. For every corner on the track, identify and timestamp these four moments:
+
+1. BRAKING MARKER VISIBLE — The exact moment a braking reference (distance board, marshal post, kerb start, barrier, shadow, bridge, sign, tree, building) first becomes visible IN THE DISTANCE ahead. This is NOT when braking happens — it is when the marker first appears in the visual field.
+
+2. APEX VISIBLE — The moment the inside of the corner (kerb, grass edge, cone, painted line, rumble strip) is clearly visible and the vehicle is at or near the braking point.
+
+3. EXIT VISIBLE — The moment the corner exit (track opening up, exit kerb, straight ahead) becomes the dominant visual target. The vehicle is at or near the apex.
+
+4. STRAIGHT / NEXT BRAKING MARKER VISIBLE — The moment the road ahead opens up after the corner AND the next corner's braking reference begins to appear in the distance.
+
+For each of these four moments, describe:
+- TIMESTAMP: in seconds from video start (e.g. 12.4)
+- WHAT IS VISIBLE: Describe exactly what physical object/marker/reference is in the centre of the visual field
+- WHAT IS IN PERIPHERAL VISION: Describe what is visible to the left and right edges of the frame — this represents the driver's peripheral awareness
+
+CRITICAL RULES:
+- You are describing what is VISIBLE in the video frame, not what the driver should do
+- Describe physical objects: "200m board on left side", "inside kerb with red/white paint", "concrete pad on right", "marshal post beside track"
+- Do NOT describe actions, technique, speed, or driving advice
+- If a marker is unclear or not visible, state "NO CLEAR MARKER VISIBLE — nearest reference: [describe]"
+- For moments where the next braking marker is not yet visible on the straight, state the approximate timestamp when it first appears
+- Timestamps must be in SECONDS from start of video (e.g. 12.5, not "0:12")
+- Every corner must have brakeMarkerVisible ≤ entry ≤ apex ≤ exit ≤ nextMarkerVisible
+- If corners form a complex (chicane, esses), still list them individually but note the connection
+
+RESPOND IN VALID JSON ONLY:
+{
+  "trackEstimate": "string — your best guess at the track name, or 'Unknown'",
+  "lapDuration": number,
+  "totalCorners": number,
+  "corners": [
+    {
+      "number": 1,
+      "name": "string — corner name if known, otherwise 'Turn 1'",
+      "direction": "left|right",
+      "type": "hairpin|tight|sweeper|kink|chicane|esses|offcamber|straight|medium",
+      "severity": "very_tight|tight|medium|fast|flat_out",
+      "timestamps": {
+        "brakeMarkerVisible": 0.0,
+        "entry": 0.0,
+        "apex": 0.0,
+        "exit": 0.0,
+        "nextMarkerVisible": 0.0
+      },
+      "pause_points": [
+        {
+          "cue": "Eyes Braking Marker — Aware Apex",
+          "timestamp": 0.0,
+          "eyes_target": "200m distance board on left side of track",
+          "peripheral_field": "Inside kerb beginning to appear on right edge of frame"
+        },
+        {
+          "cue": "Eyes Apex — Aware Exit",
+          "timestamp": 0.0,
+          "eyes_target": "Red and white inside kerb at closest point",
+          "peripheral_field": "Track opening up on left edge of frame, concrete pad visible"
+        },
+        {
+          "cue": "Eyes Exit — Aware Straight",
+          "timestamp": 0.0,
+          "eyes_target": "Concrete pad beyond ripple strip on right",
+          "peripheral_field": "Straight road ahead visible in upper portion of frame"
+        },
+        {
+          "cue": "Eyes Straight — Aware Braking Marker",
+          "timestamp": 0.0,
+          "eyes_target": "Straight road ahead",
+          "peripheral_field": "Next corner entry reference beginning to appear in distance"
+        }
+      ],
+      "visualReferences": {
+        "brakingReference": "string — physical object eyes fixate on as braking cue",
+        "apexFixation": "string — physical object eyes lock onto at apex",
+        "exitTarget": "string — physical object eyes snap to on exit",
+        "peripheralCues": "string — what's in peripheral vision"
+      },
+      "isPartOfComplex": false,
+      "complexWith": [],
+      "confidence": 0.95
+    }
+  ]
+}`;
+    },
+
+
+    // ============================================================
     //  GPT-4o TRACK MAP ANALYSIS — Spatial/Geometric Reasoning
     // ============================================================
 
@@ -684,29 +993,38 @@ If the guide warns about specific hazards (ripple strips, concrete walls, no run
         const content = [
             {
                 type: 'text',
-                text: `You are an expert motorsport track analyst. Analyze this circuit map image for "${trackName || 'Unknown Track'}".
+                text: `You are a visual target mapper for a gaze conditioning system used by racing drivers and riders.
 
-EXTRACT THE FOLLOWING FOR EACH VISIBLE CORNER:
-1. Corner number/name (as labeled on the map, or numbered sequentially)
-2. Direction: "left" or "right"
-3. Type: "hairpin" | "sweeper" | "chicane" | "esses" | "kink" | "offcamber" | "medium"
-4. Estimated severity/tightness: "very_tight" | "tight" | "medium" | "fast" | "flat_out"
-5. Spatial relationships: what comes before and after each corner
-6. Any elevation cues visible (uphill/downhill arrows, gradient markers)
-7. Corner sequences that form a complex (chicanes, esses, linked corners)
-8. Key braking zones (long straights ending in tight corners)
-9. Racing line hints if visible
+You are NOT analysing racing lines or driving technique. You are identifying WHAT PHYSICAL OBJECTS are visible at each critical point around each corner — the things a driver's eyes would fixate on.
 
-ALSO IDENTIFY:
-- Start/finish straight location
-- DRS zones or long straights (key acceleration zones)
-- Sector boundaries if marked
-- Any corner names/numbers labeled on the map
+Look at this track map for "${trackName || 'Unknown Track'}". For each corner marked on the map, identify:
+
+1. BRAKING MARKER — What physical object or reference would be visible ahead as the driver approaches? Look for: distance boards, marshal posts, barriers, kerb starts, track edge changes, buildings, trees, bridges, painted markings, tyre walls, catch fencing. Describe the object and its position (left/right of track).
+
+2. APEX REFERENCE — What physical object marks the inside of the corner? Look for: inside kerb (describe colour/type), grass edge, painted line, rumble strip, cone position, marshal post, tyre barrier. Describe what the driver would fixate on.
+
+3. EXIT REFERENCE — What physical object or view marks the corner exit? Look for: exit kerb, track widening, concrete run-off, ripple strip, barrier end, straight road appearing. Describe what becomes the dominant visual target.
+
+4. STRAIGHT / TRANSITION — What is visible between this corner's exit and the next corner's braking marker? Describe the visual field: straight road, slight curves, buildings in distance, next corner's entry features becoming visible.
+
+Also identify from the map:
+- Corner number and name (if labelled)
+- Direction: Left or Right
+- Whether the map shows: BP (Braking Point), TP (Turn-in Point), APEX, EXIT markers
+- Any hazards or features marked: kerbing (red/white stripes), gravel traps (dots), grass (green), walls, tyre barriers, marshal posts (M), concrete pads
+- Spatial relationship between corners: how far apart, connected or separated by straight
 ${existingDesc}
+
+CRITICAL RULES:
+- Describe only PHYSICAL OBJECTS that are visible — things eyes can fixate on
+- Do NOT describe driving lines, technique, speed, or vehicle behaviour
+- If the map does not show enough detail for a specific target, state "NOT VISIBLE ON MAP — requires video confirmation"
+- Use the map legend and markings to identify kerb types, run-off areas, and marshal positions
 
 Respond ONLY in valid JSON:
 {
   "trackName": "string",
+  "direction": "clockwise|counter-clockwise",
   "totalCorners": number,
   "sectors": [{ "name": "string", "corners": [1, 2, 3] }],
   "corners": [
@@ -716,8 +1034,17 @@ Respond ONLY in valid JSON:
       "direction": "left|right",
       "type": "hairpin|sweeper|chicane|esses|kink|offcamber|medium",
       "severity": "very_tight|tight|medium|fast|flat_out",
-      "approach": "string — what precedes this corner (e.g., 'long straight', 'exit of Turn 3')",
-      "exit": "string — what follows (e.g., 'short straight to Turn 5', 'immediately into Turn 4')",
+      "map_markers_shown": ["BP", "TP", "APEX", "EXIT"],
+      "visual_targets": {
+        "braking_marker": "200m board on left side — visible on approach from main straight",
+        "apex_reference": "Red/white inside kerb — tight radius",
+        "exit_reference": "Concrete pad on right beyond ripple strip",
+        "straight_transition": "Short straight, next corner entry features visible within 100m"
+      },
+      "hazards_visible": ["Ripple strip on exit (right)", "Gravel trap beyond kerb"],
+      "distance_to_next_corner": "short|medium|long",
+      "approach": "string — what precedes this corner",
+      "exit": "string — what follows this corner",
       "elevation": "uphill|downhill|flat|crest|dip|unknown",
       "isPartOfComplex": false,
       "complexWith": [],
@@ -725,8 +1052,7 @@ Respond ONLY in valid JSON:
       "notes": "string — any additional spatial context"
     }
   ],
-  "keyFeatures": ["string — notable track characteristics"],
-  "racingLineNotes": "string — overall racing line strategy if visible"
+  "keyFeatures": ["string — notable track characteristics"]
 }`
             },
             {

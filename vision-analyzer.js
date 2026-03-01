@@ -28,7 +28,7 @@ const VisionAnalyzer = {
         batchSize: 8,             // Frames per API call (cost vs accuracy)
         imageSize: 512,           // Resize frames to 512px wide
         imageQuality: 0.6,        // JPEG quality
-        model: 'gemini-2.0-flash',  // Vision model
+        model: 'gemini-2.5-flash',  // Vision model
     },
 
     // ── State ────────────────────────────────────────────────

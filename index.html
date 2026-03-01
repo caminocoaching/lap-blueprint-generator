@@ -127,9 +127,9 @@
                         <div class="form-group">
                             <label for="model-select">Gemini Model</label>
                             <select id="model-select" class="form-input">
-                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
-                                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite (Fastest)</option>
-                                <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro (Best Quality)</option>
+                                <option value="gemini-2.5-flash">Gemini 2.5 Flash (Recommended)</option>
+                                <option value="gemini-2.5-flash-lite">Gemini 2.5 Flash-Lite (Fastest)</option>
+                                <option value="gemini-2.5-pro">Gemini 2.5 Pro (Best Quality)</option>
                             </select>
                         </div>
                     </div>
@@ -141,6 +141,27 @@
                             <label for="openai-key-input">OpenAI API Key</label>
                             <input type="password" id="openai-key-input" placeholder="sk-proj-..." class="form-input">
                             <p class="form-hint">GPT-4o analyses track map images to understand corner geometry, elevation, camber &amp; braking zones. Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color: var(--accent-cyan);">platform.openai.com</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Airtable Prompt Management -->
+                    <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                        <h3 style="font-size: 0.85rem; font-weight: 700; color: #f59e0b; margin-bottom: 12px;">📋 PROMPT LAB — Airtable Live Editing</h3>
+                        <p class="form-hint" style="margin-bottom: 12px;">Connect to Airtable to edit pipeline prompts live — no redeployment needed. Leave blank to use built-in prompts.</p>
+                        <div class="form-group">
+                            <label for="airtable-key-input">Airtable Personal Access Token</label>
+                            <input type="password" id="airtable-key-input" placeholder="pat..." class="form-input">
+                            <p class="form-hint">Get your token at <a href="https://airtable.com/create/tokens" target="_blank" style="color: var(--accent-cyan);">airtable.com/create/tokens</a> — needs <code>data.records:read</code> scope</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="airtable-base-input">Airtable Base ID</label>
+                            <input type="text" id="airtable-base-input" placeholder="appXXXXXXXXXXXXXX" class="form-input">
+                            <p class="form-hint">Find in your Airtable base URL: airtable.com/<strong>appXXX</strong>/...</p>
+                        </div>
+                        <div class="form-group">
+                            <label for="airtable-table-input">Table Name or ID</label>
+                            <input type="text" id="airtable-table-input" placeholder="Pipeline Prompts" class="form-input" value="Pipeline Prompts">
+                            <p class="form-hint">Name of the table containing your prompts (default: "Pipeline Prompts")</p>
                         </div>
                     </div>
 
@@ -269,12 +290,119 @@
         <!-- ========== VIEW: BUILDER ========== -->
         <main id="view-builder" class="view">
             <div class="builder-container">
+                <!-- ═══════════════════════════════════════════════════════════
+                     STEP-BY-STEP LAP BUILDING GUIDE
+                     The clear pipeline that powers the system
+                     ═══════════════════════════════════════════════════════════ -->
+                <div class="pipeline-guide" id="pipeline-guide">
+                    <div class="pipeline-guide-header">
+                        <h2 class="pipeline-guide-title">BUILD YOUR LAP BLUEPRINT</h2>
+                        <p class="pipeline-guide-sub">6 steps. Same process every time. Each step feeds the next.</p>
+                    </div>
+                    <div class="pipeline-steps-bar" id="pipeline-steps">
+                        <div class="pipeline-step active" data-step="1" id="pipeline-step-1">
+                            <div class="pipeline-step-num">1</div>
+                            <div class="pipeline-step-info">
+                                <div class="pipeline-step-label">Upload Video</div>
+                                <div class="pipeline-step-desc">Onboard lap footage</div>
+                            </div>
+                        </div>
+                        <div class="pipeline-step-connector"></div>
+                        <div class="pipeline-step" data-step="2" id="pipeline-step-2">
+                            <div class="pipeline-step-num">2</div>
+                            <div class="pipeline-step-info">
+                                <div class="pipeline-step-label">Trim Lap</div>
+                                <div class="pipeline-step-desc">Set start & end</div>
+                            </div>
+                        </div>
+                        <div class="pipeline-step-connector"></div>
+                        <div class="pipeline-step" data-step="3" id="pipeline-step-3">
+                            <div class="pipeline-step-num">3</div>
+                            <div class="pipeline-step-info">
+                                <div class="pipeline-step-label">Detect Corners</div>
+                                <div class="pipeline-step-desc">Gemini watches your lap</div>
+                            </div>
+                        </div>
+                        <div class="pipeline-step-connector"></div>
+                        <div class="pipeline-step" data-step="4" id="pipeline-step-4">
+                            <div class="pipeline-step-num">4</div>
+                            <div class="pipeline-step-info">
+                                <div class="pipeline-step-label">Build Blueprint</div>
+                                <div class="pipeline-step-desc">Claude generates 4 cues</div>
+                            </div>
+                        </div>
+                        <div class="pipeline-step-connector"></div>
+                        <div class="pipeline-step" data-step="5" id="pipeline-step-5">
+                            <div class="pipeline-step-num">5</div>
+                            <div class="pipeline-step-info">
+                                <div class="pipeline-step-label">Conditioning Video</div>
+                                <div class="pipeline-step-desc">5-lap progressive</div>
+                            </div>
+                        </div>
+                        <div class="pipeline-step-connector"></div>
+                        <div class="pipeline-step" data-step="6" id="pipeline-step-6">
+                            <div class="pipeline-step-num">6</div>
+                            <div class="pipeline-step-info">
+                                <div class="pipeline-step-label">Export</div>
+                                <div class="pipeline-step-desc">Video + PDF</div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- The Four Cues Reference -->
+                    <div class="four-cues-ref" id="four-cues-ref">
+                        <div class="four-cues-title">THE FOUR CUES — Every corner. Same language. Same sequence. Automatic.</div>
+                        <div class="four-cues-grid">
+                            <div class="four-cue-item"><span class="four-cue-num">1</span> Eyes Braking Marker — Aware Apex</div>
+                            <div class="four-cue-item"><span class="four-cue-num">2</span> Eyes Apex — Aware Exit</div>
+                            <div class="four-cue-item"><span class="four-cue-num">3</span> Eyes Exit — Aware Straight</div>
+                            <div class="four-cue-item"><span class="four-cue-num">4</span> Eyes Straight — Aware Braking Marker</div>
+                        </div>
+                    </div>
+
+                    <!-- How It Works — AI Pipeline -->
+                    <div class="pipeline-how-it-works" id="pipeline-how">
+                        <button class="how-toggle" id="how-toggle">How the 3 AIs work together ▾</button>
+                        <div class="how-content hidden" id="how-content">
+                            <div class="how-flow">
+                                <div class="how-step">
+                                    <div class="how-step-icon" style="background: rgba(245,158,11,0.15); color: #f59e0b;">🎥</div>
+                                    <div class="how-step-label">GEMINI 2.5 PRO</div>
+                                    <div class="how-step-job">Watches your onboard video. Identifies every visual target at each moment around each corner.</div>
+                                    <div class="how-step-out">Timestamps + physical object descriptions</div>
+                                </div>
+                                <div class="how-arrow">▼</div>
+                                <div class="how-step">
+                                    <div class="how-step-icon" style="background: rgba(139,92,246,0.15); color: #8b5cf6;">🗺️</div>
+                                    <div class="how-step-label">GPT-4o VISION</div>
+                                    <div class="how-step-job">Reads the track map. Identifies physical markers at each corner — boards, kerbs, posts, barriers.</div>
+                                    <div class="how-step-out">Corner-by-corner visual target map</div>
+                                </div>
+                                <div class="how-arrow">▼</div>
+                                <div class="how-step">
+                                    <div class="how-step-icon" style="background: rgba(0,240,255,0.15); color: #00f0ff;">🧠</div>
+                                    <div class="how-step-label">CLAUDE SONNET 4.5</div>
+                                    <div class="how-step-job">Combines both data sources. Generates 4 pause points per corner with exact Eyes + Aware targets. Flags weak corners. Builds training protocol.</div>
+                                    <div class="how-step-out">Complete Quiet Eye Blueprint</div>
+                                </div>
+                                <div class="how-arrow">▼</div>
+                                <div class="how-step">
+                                    <div class="how-step-icon" style="background: rgba(16,185,129,0.15); color: #10b981;">🔊</div>
+                                    <div class="how-step-label">VOICE CUES</div>
+                                    <div class="how-step-job">4 spoken cues play during pauses. Calm, clear, authoritative. "Eyes... Braking Marker. Aware... Apex."</div>
+                                    <div class="how-step-out">Audio overlay on conditioning video</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <!-- Phase 1: Load Video -->
                 <div class="builder-phase" id="builder-phase-1">
                     <div class="phase-header">
-                        <div class="phase-badge">STEP 1</div>
-                        <h2>Load Onboard Footage</h2>
-                        <p>Upload the raw onboard lap video. This should be a single clean lap.</p>
+                        <div class="phase-badge">STEP 1 — UPLOAD</div>
+                        <h2>Upload Your Onboard Lap Video</h2>
+                        <p>One clean lap of onboard footage. This is what Gemini will watch to find every visual target.</p>
                     </div>
                     <div class="upload-zone" id="builder-upload-zone">
                         <div class="upload-icon">🎬</div>
@@ -557,13 +685,12 @@
                         style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;">
                 </div>
 
-                <!-- Phase 2: Mark Gaze Points -->
+                <!-- Phase 2: Trim & Detect -->
                 <div class="builder-phase hidden" id="builder-phase-2">
                     <div class="phase-header">
-                        <div class="phase-badge">STEP 2</div>
-                        <h2>Trim Lap &amp; Mark Gaze Points</h2>
-                        <p>First, set the <strong>Lap Start</strong> and <strong>Lap End</strong> to trim the video to a
-                            single clean lap. Then mark 4 gaze lock-in points per corner.</p>
+                        <div class="phase-badge">STEP 2 — TRIM</div>
+                        <h2>Trim to One Clean Lap</h2>
+                        <p>Set <strong>Lap Start</strong> and <strong>Lap End</strong> to isolate a single flying lap. This defines the exact segment Gemini will analyse.</p>
                     </div>
 
                     <!-- Video with Marker Controls -->
@@ -617,6 +744,61 @@
                                 <button class="btn btn-sm btn-primary" id="trim-set-end">📌 Set End</button>
                             </div>
                         </div>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════
+                         GEMINI AUTO-DETECT — Full Video Forward Pass
+                         Uploads entire lap to Gemini 2.5 Pro for automated corner detection
+                         ═══════════════════════════════════════════════ -->
+                    <div class="auto-detect-panel" id="auto-detect-panel">
+                        <div class="auto-detect-header">
+                            <div class="auto-detect-title">
+                                <div class="ai-icon-pulse">🎥</div>
+                                <div>
+                                    <h3>Step 3 — Detect Corners</h3>
+                                    <p class="auto-detect-subtitle">Gemini 2.5 Pro watches your full lap and identifies every visual target — braking markers, apex kerbs, exit references, and the transitions between them.</p>
+                                </div>
+                            </div>
+                            <div class="auto-detect-badge">STEP 3</div>
+                        </div>
+
+                        <!-- Auto-Detect Action -->
+                        <div class="auto-detect-action">
+                            <button class="btn btn-lg btn-primary auto-detect-btn" id="auto-detect-btn"
+                                style="width: 100%; font-size: 17px; padding: 16px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; border-radius: 12px; color: white; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(139,92,246,0.3);">
+                                🔍 Analyse Full Lap Video
+                            </button>
+                            <p class="auto-detect-hint">Uploads your trimmed lap to Gemini 2.5 Pro for AI corner detection. Requires Gemini API key.</p>
+                        </div>
+
+                        <!-- Auto-Detect Progress -->
+                        <div class="auto-detect-progress hidden" id="auto-detect-progress">
+                            <div class="ai-progress-bar">
+                                <div class="ai-progress-fill" id="auto-detect-progress-fill"></div>
+                            </div>
+                            <div class="ai-progress-status" id="auto-detect-status">Uploading video to Gemini...</div>
+                        </div>
+
+                        <!-- Auto-Detect Results -->
+                        <div class="auto-detect-results hidden" id="auto-detect-results">
+                            <div class="auto-detect-results-header">
+                                <h4>Detected Corners</h4>
+                                <div class="auto-detect-results-actions">
+                                    <button class="btn btn-sm btn-outline" id="auto-detect-edit-btn">✏️ Edit</button>
+                                    <button class="btn btn-sm btn-primary" id="auto-detect-confirm-btn"
+                                        style="background: #10b981; border-color: #10b981;">
+                                        ✓ Confirm & Generate Blueprint
+                                    </button>
+                                </div>
+                            </div>
+                            <div class="auto-detect-corners-list" id="auto-detect-corners-list">
+                                <!-- Dynamically populated -->
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="method-divider">
+                        <span class="method-divider-text">— or mark corners manually —</span>
                     </div>
 
                     <!-- ═══════════════════════════════════════════════
@@ -893,12 +1075,29 @@
                             </div>
                             <div class="ai-corners-list" id="ai-corners-list"></div>
 
-                            <!-- BUILD CONDITIONING VIDEO button -->
+                            <!-- STEP 4: Build Blueprint + STEP 5: Build Conditioning Video -->
                             <div class="conditioning-launch" id="conditioning-launch" style="margin-top: 16px;">
-                                <button class="btn btn-lg btn-accent" id="build-conditioning-btn"
-                                    style="width: 100%; font-size: 18px; padding: 16px; background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); border: none; border-radius: 12px; color: white; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(0,100,255,0.3);">
-                                    🎬 Build 5-Lap Conditioning Video
-                                </button>
+                                <div style="display: grid; gap: 12px;">
+                                    <!-- Step 4: Generate Blueprint -->
+                                    <div style="padding: 16px; border-radius: 12px; background: rgba(0,240,255,0.06); border: 1px solid rgba(0,240,255,0.2);">
+                                        <div style="font-size: 0.75rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 8px; letter-spacing: 0.5px;">STEP 4 — BUILD BLUEPRINT</div>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px;">Claude takes the corner data and generates 4 Quiet Eye pause points per corner with exact Eyes + Aware targets, weak corner flags, and training protocol.</p>
+                                        <button class="btn btn-lg btn-primary" id="build-blueprint-btn-main"
+                                            style="width: 100%; font-size: 16px; padding: 14px; background: linear-gradient(135deg, #00f0ff 0%, #0072ff 100%); border: none; border-radius: 10px; color: white; font-weight: 700; cursor: pointer;">
+                                            🧠 Generate Quiet Eye Blueprint
+                                        </button>
+                                    </div>
+
+                                    <!-- Step 5: Build Conditioning Video -->
+                                    <div style="padding: 16px; border-radius: 12px; background: rgba(139,92,246,0.06); border: 1px solid rgba(139,92,246,0.2);">
+                                        <div style="font-size: 0.75rem; font-weight: 700; color: #8b5cf6; margin-bottom: 8px; letter-spacing: 0.5px;">STEP 5 — CONDITIONING VIDEO</div>
+                                        <p style="font-size: 0.8rem; color: var(--text-secondary); margin-bottom: 12px;">Build the 5-lap progressive conditioning video with pauses, overlays, and voice cues at every gaze point.</p>
+                                        <button class="btn btn-lg btn-accent" id="build-conditioning-btn"
+                                            style="width: 100%; font-size: 16px; padding: 14px; background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; border-radius: 10px; color: white; font-weight: 700; cursor: pointer;">
+                                            🎬 Build 5-Lap Conditioning Video
+                                        </button>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -907,7 +1106,7 @@
                             <div class="conditioning-header">
                                 <div class="ai-section-label">
                                     <span class="ai-label-icon">🎬</span>
-                                    Quiet Eye Conditioning Video
+                                    Step 5 — Quiet Eye Conditioning Video
                                 </div>
                                 <div class="conditioning-controls">
                                     <button class="btn btn-sm btn-outline" id="cond-preview-btn"
@@ -925,6 +1124,11 @@
                                         title="Export as video file"
                                         style="background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); border: none; color: white;">
                                         📥 Export Video
+                                    </button>
+                                    <button class="btn btn-sm btn-accent" id="pdf-export-btn"
+                                        title="Export QE Blueprint as PDF"
+                                        style="background: linear-gradient(135deg, #10b981 0%, #059669 100%); border: none; color: white;">
+                                        📄 Export PDF
                                     </button>
                                 </div>
                             </div>
@@ -1228,7 +1432,9 @@
         </main>
     </div>
 
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.2/jspdf.umd.min.js"></script>
     <script src="ai-engine.js"></script>
+    <script src="airtable-prompts.js"></script>
     <script src="blueprint-templates.js"></script>
     <script src="blueprint-validators.js"></script>
     <script src="blueprint-pipeline.js"></script>
@@ -1237,6 +1443,9 @@
     <script src="vision-analyzer.js"></script>
     <script src="corner-wizard.js"></script>
     <script src="conditioning-engine.js"></script>
+    <script src="audio-loader.js"></script>
+    <script src="pdf-export.js"></script>
+    <script src="ruapuna-blueprint.js"></script>
     <script src="app.js"></script>
 </body>
 

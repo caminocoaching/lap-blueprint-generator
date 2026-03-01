@@ -37,7 +37,7 @@ const CornerWizard = {
         scanStepSec: 2,            // How far to jump when scanning for next event
         imageSize: 640,            // Frame size for AI
         imageQuality: 0.7,
-        model: 'gemini-2.0-flash',   // Now uses Gemini instead of GPT-4o
+        model: 'gemini-2.5-flash',   // Now uses Gemini instead of GPT-4o
         cvEnabled: true,           // Enable CV signal computation
     },
 
