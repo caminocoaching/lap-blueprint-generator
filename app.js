@@ -82,6 +82,15 @@ const App = {
         this.setupVoiceCues();
         this.refreshDashboard();
 
+        // Auto-load bundled voice cues from /audio/ folder
+        if (typeof AudioCueLoader !== 'undefined') {
+            AudioCueLoader.init().then(count => {
+                if (count > 0) {
+                    this.toast(`${count} voice cues loaded from /audio/`, 'success');
+                }
+            });
+        }
+
         // Loading screen
         setTimeout(() => {
             document.getElementById('loading-screen').classList.add('fade-out');
@@ -103,6 +112,17 @@ const App = {
         // OpenAI key
         const openaiKeyInput = document.getElementById('openai-key-input');
         if (openaiKeyInput && AIEngine.openaiApiKey) openaiKeyInput.value = AIEngine.openaiApiKey;
+
+        // Airtable Prompt Lab
+        if (typeof AirtablePrompts !== 'undefined') {
+            AirtablePrompts.init();
+            const atKeyInput = document.getElementById('airtable-key-input');
+            const atBaseInput = document.getElementById('airtable-base-input');
+            const atTableInput = document.getElementById('airtable-table-input');
+            if (atKeyInput && AirtablePrompts._apiKey) atKeyInput.value = AirtablePrompts._apiKey;
+            if (atBaseInput && AirtablePrompts._baseId) atBaseInput.value = AirtablePrompts._baseId;
+            if (atTableInput && AirtablePrompts._tableId) atTableInput.value = AirtablePrompts._tableId;
+        }
     },
 
     // ===== NAVIGATION =====
@@ -144,6 +164,17 @@ const App = {
             const openaiKey = document.getElementById('openai-key-input')?.value.trim();
             if (openaiKey) AIEngine.setOpenAIKey(openaiKey);
 
+            // Airtable Prompt Lab
+            if (typeof AirtablePrompts !== 'undefined') {
+                const atKey = document.getElementById('airtable-key-input')?.value.trim();
+                const atBase = document.getElementById('airtable-base-input')?.value.trim();
+                const atTable = document.getElementById('airtable-table-input')?.value.trim() || 'Pipeline Prompts';
+                AirtablePrompts.setConfig(atKey, atBase, atTable);
+                if (atKey && atBase) {
+                    AirtablePrompts.clearCache(); // force refresh on next build
+                }
+            }
+
             // Blueprint provider
             const provider = document.getElementById('blueprint-provider-select').value;
             AIEngine.setBlueprintProvider(provider);
@@ -182,11 +213,44 @@ const App = {
         document.getElementById('marker-prev-corner').addEventListener('click', () => this.prevCorner());
         document.getElementById('marker-finish').addEventListener('click', () => this.finishMarking());
 
-        // Build button
+        // Build button (both the original and new Step 4 button)
         document.getElementById('build-blueprint-btn').addEventListener('click', () => this.buildBlueprint());
+        const mainBlueprintBtn = document.getElementById('build-blueprint-btn-main');
+        if (mainBlueprintBtn) {
+            mainBlueprintBtn.addEventListener('click', () => {
+                this.updatePipelineStep(4);
+                this.buildBlueprint();
+            });
+        }
+
+        // How-it-works toggle
+        const howToggle = document.getElementById('how-toggle');
+        const howContent = document.getElementById('how-content');
+        if (howToggle && howContent) {
+            howToggle.addEventListener('click', () => {
+                howContent.classList.toggle('hidden');
+                howToggle.textContent = howContent.classList.contains('hidden')
+                    ? 'How the 3 AIs work together ▾'
+                    : 'How the 3 AIs work together ▴';
+            });
+        }
 
         // Track Research button
         document.getElementById('research-track-btn').addEventListener('click', () => this.researchTrack());
+
+        // Track name input — detect pre-built blueprints (Ruapuna)
+        const trackInput = document.getElementById('builder-track');
+        if (trackInput) {
+            trackInput.addEventListener('input', () => {
+                const name = trackInput.value.trim();
+                const researchBtn = document.getElementById('research-track-btn');
+                if (typeof RuapunaBlueprint !== 'undefined' && RuapunaBlueprint.isRuapuna(name)) {
+                    if (researchBtn) researchBtn.textContent = '🏁 Load Ruapuna QE Blueprint';
+                } else {
+                    if (researchBtn) researchBtn.textContent = '🔍 Research Track for QE';
+                }
+            });
+        }
 
         // Track Guide Upload
         const guideDropZone = document.getElementById('track-guide-drop');
@@ -434,8 +498,9 @@ const App = {
             trackInput.value = file.name.replace(/\.[^/.]+$/, '').replace(/[-_]/g, ' ');
         }
 
-        // Show phase 2
+        // Show phase 2 (trim) and update pipeline indicator
         document.getElementById('builder-phase-2').classList.remove('hidden');
+        this.updatePipelineStep(2);  // Step 2: Trim Lap
 
         // Setup marker video
         const video = document.getElementById('marker-video');
@@ -446,6 +511,7 @@ const App = {
 
         this.setupMarkerControls();
         this.setupTrimControls();
+        this.setupAutoDetect();
         this.setupAIAnalyzer();
         this.setupCornerWizard();
 
@@ -651,7 +717,268 @@ const App = {
     },
 
     // ─────────────────────────────────────────────────────────
-    //  AI LAP ANALYZER INTEGRATION
+    //  GEMINI AUTO-DETECT — Full Video Forward Pass
+    // ─────────────────────────────────────────────────────────
+
+    _autoDetectResults: null,   // Latest auto-detect results from Gemini
+
+    setupAutoDetect() {
+        const btn = document.getElementById('auto-detect-btn');
+        const confirmBtn = document.getElementById('auto-detect-confirm-btn');
+        const editBtn = document.getElementById('auto-detect-edit-btn');
+
+        if (!btn) return;
+
+        btn.onclick = () => this.runAutoDetect();
+
+        if (confirmBtn) {
+            confirmBtn.onclick = () => this.confirmAutoDetectCorners();
+        }
+
+        if (editBtn) {
+            editBtn.onclick = () => {
+                // Allow inline editing — for now just enable delete buttons
+                this.toast('Click the × on any corner to remove it', 'info');
+            };
+        }
+    },
+
+    async runAutoDetect() {
+        if (!AIEngine.geminiApiKey) {
+            this.toast('Set your Gemini API key in Settings first', 'error');
+            return;
+        }
+        if (!this.builder.videoFile) {
+            this.toast('Upload a video first', 'error');
+            return;
+        }
+
+        // Update pipeline to step 3 (detecting)
+        this.updatePipelineStep(3);
+
+        const btn = document.getElementById('auto-detect-btn');
+        const progressEl = document.getElementById('auto-detect-progress');
+        const progressFill = document.getElementById('auto-detect-progress-fill');
+        const statusEl = document.getElementById('auto-detect-status');
+        const resultsEl = document.getElementById('auto-detect-results');
+
+        // Disable button, show progress
+        btn.disabled = true;
+        btn.textContent = '⏳ Analysing...';
+        progressEl.classList.remove('hidden');
+        resultsEl.classList.add('hidden');
+
+        // Read current form values
+        const trackNameInput = document.getElementById('builder-track');
+        const vehicleInput = document.getElementById('builder-vehicle');
+        if (trackNameInput) this.builder.trackName = trackNameInput.value.trim();
+        if (vehicleInput) this.builder.vehicleType = vehicleInput.value;
+
+        try {
+            const result = await AIEngine.analyzeVideoForward(
+                this.builder.videoFile,
+                {
+                    trackName: this.builder.trackName || null,
+                    vehicleType: this.builder.vehicleType || null,
+                    lapStart: this.builder.lapStart,
+                    lapEnd: this.builder.lapEnd
+                },
+                (pct, msg) => {
+                    progressFill.style.width = `${pct}%`;
+                    statusEl.textContent = msg;
+                }
+            );
+
+            this._autoDetectResults = result;
+            this._renderAutoDetectResults(result);
+
+            resultsEl.classList.remove('hidden');
+            progressEl.classList.add('hidden');
+
+            this.toast(`Detected ${result.corners?.length || 0} corners`, 'success');
+
+        } catch (err) {
+            console.error('[AutoDetect] Error:', err);
+            statusEl.textContent = `Error: ${err.message}`;
+            this.toast(`Analysis failed: ${err.message}`, 'error');
+        } finally {
+            btn.disabled = false;
+            btn.textContent = '🔍 Analyse Full Lap Video';
+        }
+    },
+
+    _renderAutoDetectResults(result) {
+        const listEl = document.getElementById('auto-detect-corners-list');
+        if (!listEl || !result.corners) return;
+
+        listEl.innerHTML = '';
+
+        if (result.trackEstimate && result.trackEstimate !== 'Unknown') {
+            const trackEst = document.createElement('div');
+            trackEst.style.cssText = 'margin-bottom: 10px; font-size: 13px; color: var(--text-muted);';
+            trackEst.textContent = `Track identified: ${result.trackEstimate} (${result.totalCorners || result.corners.length} corners, ${(result.lapDuration || 0).toFixed(1)}s lap)`;
+            listEl.appendChild(trackEst);
+        }
+
+        result.corners.forEach((corner, idx) => {
+            const card = document.createElement('div');
+            card.className = 'auto-detect-corner-card';
+            card.dataset.cornerIndex = idx;
+
+            const dir = (corner.direction || 'right').toLowerCase();
+            const conf = corner.confidence || 0.5;
+            const confClass = conf >= 0.8 ? 'high' : conf >= 0.5 ? 'medium' : 'low';
+
+            const ts = corner.timestamps || {};
+            const formatT = (t) => t != null ? `${t.toFixed(1)}s` : '—';
+
+            card.innerHTML = `
+                <div class="ad-corner-num ${dir}">${corner.number || idx + 1}</div>
+                <div class="ad-corner-info">
+                    <div class="ad-corner-name">${corner.name || 'Turn ' + (idx + 1)} — ${dir.toUpperCase()}</div>
+                    <div class="ad-corner-type">${corner.type || 'medium'} · ${corner.severity || 'medium'}</div>
+                </div>
+                <div class="ad-corner-timestamps">
+                    <span>🎯 ${formatT(ts.entry)}</span>
+                    <span>◎ ${formatT(ts.apex)}</span>
+                    <span>➡ ${formatT(ts.exit)}</span>
+                </div>
+                <div class="ad-corner-conf ${confClass}">${(conf * 100).toFixed(0)}%</div>
+                <button class="ad-corner-delete" title="Remove corner">×</button>
+            `;
+
+            // Seek to entry on click
+            card.addEventListener('click', (e) => {
+                if (e.target.classList.contains('ad-corner-delete')) return;
+                const video = document.getElementById('marker-video');
+                if (video && ts.entry != null) {
+                    video.currentTime = ts.entry;
+                    video.pause();
+                }
+            });
+
+            // Delete button
+            card.querySelector('.ad-corner-delete').addEventListener('click', (e) => {
+                e.stopPropagation();
+                result.corners.splice(idx, 1);
+                this._renderAutoDetectResults(result);
+            });
+
+            listEl.appendChild(card);
+        });
+    },
+
+    confirmAutoDetectCorners() {
+        if (!this._autoDetectResults || !this._autoDetectResults.corners?.length) {
+            this.toast('No corners detected yet', 'error');
+            return;
+        }
+
+        // Convert auto-detect format to builder.corners format
+        const corners = this._autoDetectResults.corners.map((c, idx) => {
+            const ts = c.timestamps || {};
+            return {
+                number: c.number || idx + 1,
+                name: c.name || `Turn ${idx + 1}`,
+                direction: c.direction || 'right',
+                cornerType: c.type || 'medium',
+                severity: c.severity || 'medium',
+                brakeMarkerVisible: ts.brakeMarkerVisible || null,
+                brakeTime: ts.entry || 0,
+                apexTime: ts.apex || 0,
+                exitTime: ts.exit || 0,
+                nextMarkerVisible: ts.nextMarkerVisible || null,
+                visualReferences: c.visualReferences || {},
+                isPartOfComplex: c.isPartOfComplex || false,
+                complexWith: c.complexWith || [],
+                confidence: c.confidence || 0.5,
+                source: 'gemini_auto_detect'
+            };
+        });
+
+        this.builder.corners = corners;
+        this.toast(`✅ ${corners.length} corners confirmed — ready for blueprint generation`, 'success');
+
+        // Update pipeline to step 4 (ready for blueprint)
+        this.updatePipelineStep(4);
+
+        // Update any existing corner display
+        this._updateCornersList();
+
+        // If track estimate is available and no track name set, use it
+        if (this._autoDetectResults.trackEstimate && this._autoDetectResults.trackEstimate !== 'Unknown' && !this.builder.trackName) {
+            this.builder.trackName = this._autoDetectResults.trackEstimate;
+            const trackInput = document.getElementById('builder-track');
+            if (trackInput) trackInput.value = this.builder.trackName;
+        }
+
+        // Show the build conditioning button area
+        const condLaunch = document.getElementById('conditioning-launch');
+        if (condLaunch) condLaunch.scrollIntoView({ behavior: 'smooth' });
+    },
+
+    /**
+     * Update the existing corner list display (if applicable).
+     * Syncs builder.corners to any UI showing corner data.
+     */
+    _updateCornersList() {
+        // If there's an AI corners list, update its count display
+        const aiCornersList = document.getElementById('ai-corners-list');
+        if (aiCornersList && this.builder.corners) {
+            // Just update any visible counter — the auto-detect list is already rendered separately
+            console.log(`[App] Corners list updated: ${this.builder.corners.length} corners`);
+        }
+    },
+
+    // ─────────────────────────────────────────────────────────
+    //  RUAPUNA BLUEPRINT AUTO-LOAD
+    // ─────────────────────────────────────────────────────────
+
+    /**
+     * Check if a track name matches Ruapuna and auto-load the pre-built blueprint.
+     * Called from researchTrack(), confirmAutoDetectCorners(), and on track name change.
+     * @param {string} trackName
+     * @returns {boolean} true if Ruapuna was loaded
+     */
+    tryLoadRuapunaBlueprint(trackName) {
+        if (typeof RuapunaBlueprint === 'undefined') return false;
+        if (!RuapunaBlueprint.isRuapuna(trackName)) return false;
+
+        const vehicleType = document.getElementById('builder-vehicle')?.value || 'car';
+        const video = document.getElementById('marker-video');
+        const lapStart = this.builder.lapStart || 0;
+        const lapEnd = this.builder.lapEnd || (video?.duration || 90);
+
+        // Load corners from the pre-built blueprint
+        this.builder.corners = RuapunaBlueprint.toCornersArray(lapStart, lapEnd);
+        this.builder.blueprint = RuapunaBlueprint.toBlueprint(vehicleType, lapStart, lapEnd);
+        this.builder.lastBlueprint = this.builder.blueprint;
+        this.builder.trackName = trackName;
+
+        // Also set track research data so PDF export has it
+        this._trackResearchData = {
+            trackName: RuapunaBlueprint.trackName,
+            country: RuapunaBlueprint.country,
+            length: RuapunaBlueprint.length,
+            direction: RuapunaBlueprint.direction,
+            corners: this.builder.corners
+        };
+
+        // Update UI
+        this._updateCornersList();
+
+        console.log(`[App] ✅ Ruapuna QE Blueprint auto-loaded: ${this.builder.corners.length} sections, 4 cues each`);
+        this.toast(`🏁 Ruapuna QE Blueprint loaded — ${this.builder.corners.length} sections × 4 cues = ${this.builder.corners.length * 4} pause points`, 'success');
+
+        // Show conditioning launch area if it exists
+        const condLaunch = document.getElementById('conditioning-launch');
+        if (condLaunch) condLaunch.scrollIntoView({ behavior: 'smooth' });
+
+        return true;
+    },
+
+    // ─────────────────────────────────────────────────────────
+    //  AI LAP ANALYZER INTEGRATION (Legacy Frame-by-Frame)
     // ─────────────────────────────────────────────────────────
 
     _aiResults: null,       // Latest analysis results
@@ -910,6 +1237,36 @@ const App = {
         document.getElementById('cond-play-5-btn').onclick = () => this.playConditioningFull();
         document.getElementById('cond-stop-btn').onclick = () => this.stopConditioning();
         document.getElementById('cond-export-btn').onclick = () => this.exportConditioningVideo();
+
+        // PDF Export
+        const pdfBtn = document.getElementById('pdf-export-btn');
+        if (pdfBtn) {
+            pdfBtn.onclick = () => this.exportPDF();
+        }
+    },
+
+    exportPDF() {
+        if (!this.builder.corners?.length) {
+            this.toast('No corners to export — detect corners first', 'error');
+            return;
+        }
+
+        this.updatePipelineStep(6);  // Step 6: Export
+
+        try {
+            const fileName = PDFExport.generate({
+                trackName: this.builder.trackName || 'Unknown Track',
+                vehicleType: this.builder.vehicleType || document.getElementById('builder-vehicle')?.value || 'car',
+                clientName: this.builder.clientName || '',
+                corners: this.builder.corners,
+                blueprint: this.builder.lastBlueprint || this.builder.blueprint || null,
+                trackData: this.builder.trackData || this._trackResearchData || null
+            });
+            this.toast(`PDF exported: ${fileName}`, 'success');
+        } catch (err) {
+            console.error('[PDF Export] Error:', err);
+            this.toast(`PDF export failed: ${err.message}`, 'error');
+        }
     },
 
     async runAIAnalysis() {
@@ -1309,8 +1666,25 @@ const App = {
     _conditioningReady: false,
 
     buildConditioningVideo() {
-        if (!this._aiResults || !this._aiResults.corners || this._aiResults.corners.length === 0) {
-            this.toast('Run AI analysis first and detect corners', 'error');
+        // Try auto-detect corners first, then Ruapuna preset, then legacy AI results
+        let corners = [];
+
+        // Check if Ruapuna preset should be loaded
+        const trackName = document.getElementById('builder-track')?.value?.trim() || this.builder.trackName || '';
+        if (!this.builder.corners?.length && typeof RuapunaBlueprint !== 'undefined' && RuapunaBlueprint.isRuapuna(trackName)) {
+            this.tryLoadRuapunaBlueprint(trackName);
+        }
+
+        if (this.builder.corners && this.builder.corners.length > 0) {
+            // New auto-detect / preset path
+            corners = this.builder.corners;
+        } else if (this._aiResults && this._aiResults.corners) {
+            // Legacy AI analyzer path
+            corners = this._aiResults.corners.filter((_, i) => this._aiAccepted[i]);
+        }
+
+        if (corners.length === 0) {
+            this.toast('Detect corners first — use Auto-Detect or AI Analyzer', 'error');
             return;
         }
 
@@ -1324,19 +1698,20 @@ const App = {
         const startTime = this.builder.lapStart || 0;
         const endTime = this.builder.lapEnd || video.duration;
 
-        // Get accepted corners only
-        const corners = this._aiResults.corners.filter((_, i) => this._aiAccepted[i]);
-        if (corners.length === 0) {
-            this.toast('No accepted corners — accept at least one corner', 'error');
-            return;
-        }
-
-        // Get blueprint coaching data (if generated)
-        const blueprint = this.builder.lastBlueprint || null;
+        // Get blueprint coaching data (if generated or pre-built)
+        const blueprint = this.builder.lastBlueprint || this.builder.blueprint || null;
 
         // Initialize the conditioning engine
         ConditioningEngine.init(video, canvas, corners, blueprint, startTime, endTime);
+
+        // Inject bundled voice cues into the conditioning engine
+        if (typeof AudioCueLoader !== 'undefined' && AudioCueLoader.hasAnyCues()) {
+            AudioCueLoader.injectIntoConditioningEngine();
+        }
         this._conditioningReady = true;
+
+        // Update pipeline indicator to step 5 (conditioning video)
+        this.updatePipelineStep(5);
 
         // Show the conditioning player UI
         document.getElementById('conditioning-player').classList.remove('hidden');
@@ -1644,6 +2019,24 @@ const App = {
 
         if (!trackName) {
             this.toast('Enter a track name first', 'error');
+            return;
+        }
+
+        // ── Check for pre-built blueprint (Ruapuna) ──
+        if (this.tryLoadRuapunaBlueprint(trackName)) {
+            // Pre-built blueprint loaded — no API call needed
+            const statusEl = document.getElementById('research-status');
+            const textEl = document.getElementById('research-status-text');
+            const summaryEl = document.getElementById('research-result-summary');
+            if (statusEl) statusEl.classList.remove('hidden');
+            if (textEl) {
+                textEl.textContent = `✅ Pre-built QE Blueprint loaded for Ruapuna Park — 7 sections × 4 cues`;
+                textEl.style.color = 'var(--accent-green)';
+            }
+            if (summaryEl) {
+                summaryEl.innerHTML = `<strong>${RuapunaBlueprint.trackName}</strong> · ${RuapunaBlueprint.direction} · ${RuapunaBlueprint.length}<br>Pre-built 4-cue Quiet Eye protocol — ready for conditioning video`;
+                summaryEl.classList.remove('hidden');
+            }
             return;
         }
 
@@ -2465,7 +2858,12 @@ const App = {
             this._voiceCueAudio = null;
         }
 
-        // Check blueprint voice cues first, then builder voice cues
+        // Priority 1: Bundled MP3s from /audio/ folder
+        if (typeof AudioCueLoader !== 'undefined' && AudioCueLoader.play(cueId)) {
+            return; // Bundled cue played successfully
+        }
+
+        // Priority 2: Uploaded cues (blueprint or builder)
         const bpCues = this.player.blueprint?.voiceCues || {};
         const cue = bpCues[cueId] || this.voiceCues[cueId];
 
@@ -2484,7 +2882,77 @@ const App = {
     },
 
     /**
+     * TTS VOICE CUE CONFIGURATION — Prompt 4 (The Four Spoken Cues)
+     *
+     * Voice: Calm, clear, authoritative. Male. Medium pace.
+     * No excitement. No urgency. Like a meditation guide who understands motorsport.
+     *
+     * Timing per cue: "Eyes..." [0.3s pause] "[Target]" [0.5s pause] "Aware..." [0.3s pause] "[Target]"
+     * Total duration per cue: approximately 3-4 seconds
+     * These play during a 5-second pause, so remaining 1-2 seconds is silence for eyes to settle
+     *
+     * Tone notes:
+     * - "Eyes" is spoken with slight emphasis — it's the command
+     * - Target word is spoken clearly and neutrally
+     * - "Aware" is spoken slightly softer — it's the peripheral, not the focus
+     * - No rising intonation. Flat, steady, grounding.
+     *
+     * ElevenLabs prompt (for generating MP3 cues):
+     * "Calm, clear, authoritative male voice. Medium pace. No excitement. No urgency.
+     *  Like a meditation guide who understands motorsport. Flat, steady, grounding intonation."
+     */
+    TTS_CUE_CONFIG: {
+        voice: 'calm_authoritative_male',
+        rate: 0.85,           // Slightly slow — meditative pace
+        pitch: 0.75,          // Lower pitch — grounding, not exciting
+        volume: 1.0,
+        pauseAfterEyes: 300,  // ms pause after "Eyes..."
+        pauseAfterTarget: 500, // ms pause after target word
+        pauseAfterAware: 300, // ms pause after "Aware..."
+        totalCueDuration: 3500, // ms target duration per cue
+
+        // The four canonical cue texts
+        cueTexts: [
+            'Eyes... Braking Marker. Aware... Apex.',
+            'Eyes... Apex. Aware... Exit.',
+            'Eyes... Exit. Aware... Straight.',
+            'Eyes... Straight. Aware... Braking Marker.'
+        ],
+
+        // ElevenLabs generation prompt
+        elevenLabsPrompt: 'Calm, clear, authoritative male voice. Medium pace. No excitement. No urgency. Like a meditation guide who understands motorsport. Flat, steady, grounding intonation. "Eyes" is spoken with slight emphasis — it\'s the command. Target word is spoken clearly and neutrally. "Aware" is spoken slightly softer — it\'s the peripheral, not the focus. No rising intonation.'
+    },
+
+    /**
+     * Get the voice cue text for a given phase/cue number.
+     * Uses the canonical 4-cue language.
+     * @param {number} cueNum — 0-3 (or 1-4 will be adjusted)
+     * @param {Object} segment — optional segment with specific eyes/aware targets
+     * @returns {string} the voice cue text
+     */
+    getVoiceCueText(cueNum, segment) {
+        // Normalize to 0-indexed
+        const idx = cueNum >= 1 && cueNum <= 4 ? cueNum - 1 : cueNum;
+
+        // If segment has specific cueLabel, use that
+        if (segment?.cueLabel) return segment.cueLabel;
+
+        // Otherwise use canonical cue text
+        if (idx >= 0 && idx < this.TTS_CUE_CONFIG.cueTexts.length) {
+            return this.TTS_CUE_CONFIG.cueTexts[idx];
+        }
+
+        // Fallback: build from segment data
+        if (segment?.eyes && segment?.aware) {
+            return `Eyes: ${segment.eyes}. Aware: ${segment.aware}.`;
+        }
+
+        return '';
+    },
+
+    /**
      * Text-to-speech fallback using Web Speech API
+     * Configured per Prompt 4 voice specifications
      */
     speakCueTTS(text) {
         if (!('speechSynthesis' in window)) return;
@@ -2492,12 +2960,21 @@ const App = {
         speechSynthesis.cancel();
 
         const utterance = new SpeechSynthesisUtterance(text);
-        utterance.rate = 0.9;
-        utterance.pitch = 0.8;
-        utterance.volume = 1.0;
+        utterance.rate = this.TTS_CUE_CONFIG.rate;     // 0.85 — meditative pace
+        utterance.pitch = this.TTS_CUE_CONFIG.pitch;    // 0.75 — low, grounding
+        utterance.volume = this.TTS_CUE_CONFIG.volume;
 
         const voices = speechSynthesis.getVoices();
-        const preferred = voices.find(v => v.name.includes('Samantha') || v.name.includes('Daniel') || v.name.includes('Google UK'));
+        // Prefer male, calm voices — Daniel (macOS), Google UK Male, Microsoft Mark
+        const preferred = voices.find(v =>
+            v.name.includes('Daniel') ||
+            v.name.includes('Google UK English Male') ||
+            v.name.includes('Mark') ||
+            v.name.includes('James')
+        ) || voices.find(v =>
+            v.name.includes('Samantha') ||
+            v.name.includes('Google UK')
+        );
         if (preferred) utterance.voice = preferred;
 
         speechSynthesis.speak(utterance);
@@ -2951,6 +3428,23 @@ const App = {
     },
 
     // ===== UTILITIES =====
+    /**
+     * Update the pipeline step indicator bar.
+     * @param {number} step — 1, 2, or 3
+     */
+    updatePipelineStep(step) {
+        for (let i = 1; i <= 6; i++) {
+            const el = document.getElementById(`pipeline-step-${i}`);
+            if (!el) continue;
+            el.classList.remove('active', 'completed');
+            if (i === step) {
+                el.classList.add('active');
+            } else if (i < step) {
+                el.classList.add('completed');
+            }
+        }
+    },
+
     formatTimestamp(seconds) {
         if (seconds === undefined || seconds === null) return '—';
         const m = Math.floor(seconds / 60);

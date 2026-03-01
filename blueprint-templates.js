@@ -79,6 +79,16 @@ const BlueprintTemplates = {
         },
 
         gazePhases: {
+            brakeMarkerVisible: {
+                minFixationSec: 0.8,
+                maxFixationSec: 2.0,
+                headLeadTimeSec: [1.0, 1.5],
+                peripheralType: 'approach_speed_vestibular',
+                eyesHint: 'Eyes FIND the brake marker — the first visual reference that signals this corner is coming (distance board, marshal post, barrier end, shadow line, bridge structure appearing on horizon)',
+                awareHint: 'Aware = current speed through wind/vestibular, straight remaining in peripheral, bike settling from previous corner, handlebar vibration feedback',
+                vanTriggers: ['late_marker_acquisition', 'distraction_by_other_rider', 'instrument_check_instead_of_marker_search', 'visor_condensation_obscuring_marker'],
+                danFix: 'EARLY ACQUISITION — eyes must find the brake marker as EARLY as possible. The earlier the marker enters foveal vision, the calmer the braking decision. Late acquisition triggers VAN panic.'
+            },
             brake: {
                 minFixationSec: 0.5,
                 maxFixationSec: 1.2,
@@ -108,6 +118,16 @@ const BlueprintTemplates = {
                 awareHint: 'Aware = bike straightening sensation through vestibular, throttle hand opening, track-out zone boundary in peripheral, next braking zone appearing',
                 vanTriggers: ['fixating_on_gravel_trap', 'staring_at_runoff_area', 'premature_look_to_next_brake_zone', 'looking_back_at_apex'],
                 danFix: 'PFTS (Pre-Full-Throttle Saccade) — eyes snap to exit target, throttle hand follows. Commit the saccade BEFORE the throttle opens.'
+            },
+            nextMarker: {
+                minFixationSec: 0.5,
+                maxFixationSec: 1.5,
+                headLeadTimeSec: [0, 0],
+                peripheralType: 'acceleration_vestibular',
+                eyesHint: 'Eyes SEARCH for the next corner marker — the first visual reference for the NEXT corner appearing in the distance (next distance board, next kerb line, next marshal post)',
+                awareHint: 'Aware = throttle application feedback, bike straightening and accelerating, track opening up, wind building on body',
+                vanTriggers: ['celebrating_good_exit', 'looking_back_at_previous_corner', 'distraction_by_other_traffic', 'early_relaxation_before_next_corner'],
+                danFix: 'TRANSITION LOCK — the 5-second pause here is for the brain to BREATHE and PRE-LOAD the next corner. Eyes settle on the next reference, DAN pre-commits to the next sequence.'
             }
         },
 
@@ -175,6 +195,16 @@ Every "Aware" instruction must reference lean sensation, vestibular feedback, ta
         },
 
         gazePhases: {
+            brakeMarkerVisible: {
+                minFixationSec: 0.8,
+                maxFixationSec: 2.0,
+                headLeadTimeSec: [0.6, 1.0],
+                peripheralType: 'approach_speed_pedal_feedback',
+                eyesHint: 'Eyes FIND the brake marker — the first visual reference that signals this corner is coming (distance board, brake board, marshal post, barrier end, bridge pillar, shadow line)',
+                awareHint: 'Aware = throttle foot position, straight remaining in peripheral, A-pillar position relative to approaching corner, steering wheel centred, mirror check completed before marker',
+                vanTriggers: ['late_marker_acquisition', 'mirror_check_at_wrong_moment', 'dashboard_glance_during_approach', 'competitor_distraction'],
+                danFix: 'EARLY ACQUISITION — eyes find the brake marker as early as possible. The earlier the marker enters foveal vision, the calmer the braking commitment.'
+            },
             brake: {
                 minFixationSec: 0.6,
                 maxFixationSec: 1.3,
@@ -204,6 +234,16 @@ Every "Aware" instruction must reference lean sensation, vestibular feedback, ta
                 awareHint: 'Aware = steering wheel returning to neutral, throttle foot opening, track-out zone boundary in peripheral, next straight/braking zone visible',
                 vanTriggers: ['fixating_on_gravel_runoff', 'staring_at_competitor_line', 'early_look_to_next_brake', 'mirror_check_on_exit'],
                 danFix: 'Throttle commitment — eyes lock exit target BEFORE foot moves to throttle. The saccade commits the decision; the throttle follows.'
+            },
+            nextMarker: {
+                minFixationSec: 0.5,
+                maxFixationSec: 1.5,
+                headLeadTimeSec: [0, 0],
+                peripheralType: 'acceleration_pedal_feedback',
+                eyesHint: 'Eyes SEARCH for the next corner marker — the first visual reference for the NEXT corner appearing ahead (next distance board, next kerb line, next marshal post)',
+                awareHint: 'Aware = throttle foot fully open, steering wheel returning to centre, car accelerating and straightening, next corner geometry appearing in distance',
+                vanTriggers: ['mirror_check_breaking_forward_focus', 'celebrating_good_exit', 'dashboard_glance', 'relaxation_before_next_corner'],
+                danFix: 'TRANSITION LOCK — the 5-second pause here is for the brain to BREATHE and PRE-LOAD the next corner sequence. Eyes settle on the next reference, DAN pre-commits.'
             }
         },
 
@@ -271,6 +311,16 @@ Every "Aware" instruction must reference steering wheel angle, brake/throttle pe
         },
 
         gazePhases: {
+            brakeMarkerVisible: {
+                minFixationSec: 0.5,
+                maxFixationSec: 1.5,
+                headLeadTimeSec: [0.5, 0.8],
+                peripheralType: 'approach_speed_direct',
+                eyesHint: 'Eyes FIND the brake marker — visual reference at low eye-height (cone, kerb start, painted line, barrier base appearing ahead)',
+                awareHint: 'Aware = speed through wind on body (no windscreen), straight remaining, other karts in wide peripheral field',
+                vanTriggers: ['kart_ahead_blocking_marker_view', 'late_marker_pickup', 'distraction_by_close_racing'],
+                danFix: 'EARLY ACQUISITION at kart height — markers are lower relative to eye position. Scan ahead early, find the reference before the braking zone.'
+            },
             brake: {
                 minFixationSec: 0.4,
                 maxFixationSec: 1.0,
@@ -300,6 +350,16 @@ Every "Aware" instruction must reference steering wheel angle, brake/throttle pe
                 awareHint: 'Aware = throttle application (right foot), steering straightening, track width available, other kart positions',
                 vanTriggers: ['checking_kart_behind', 'fixating_on_barrier', 'premature_next_corner_look'],
                 danFix: 'Instant throttle response — eyes commit exit, foot follows with zero lag.'
+            },
+            nextMarker: {
+                minFixationSec: 0.4,
+                maxFixationSec: 1.0,
+                headLeadTimeSec: [0, 0],
+                peripheralType: 'acceleration_direct_feedback',
+                eyesHint: 'Eyes SEARCH for next corner reference — next cone, kerb start, or track feature visible from low seating position',
+                awareHint: 'Aware = throttle response through right foot, kart accelerating, other kart positions in 200°+ peripheral field',
+                vanTriggers: ['checking_behind_for_other_karts', 'celebrating_overtake', 'relaxation_on_short_straight'],
+                danFix: 'TRANSITION — kart straights are short, so next marker acquisition must be immediate. Pre-load the next corner before the exit is fully complete.'
             }
         },
 
@@ -365,6 +425,16 @@ Every "Aware" instruction must reference direct steering feel and other kart awa
         },
 
         gazePhases: {
+            brakeMarkerVisible: {
+                minFixationSec: 0.6,
+                maxFixationSec: 1.8,
+                headLeadTimeSec: [0.6, 1.0],
+                peripheralType: 'approach_speed_through_halo',
+                eyesHint: 'Eyes FIND the brake marker THROUGH the halo — distance board, barrier end, bridge structure appearing on approach. Must confirm visibility around halo bar.',
+                awareHint: 'Aware = extreme closing speed through G-force, halo bar position relative to upcoming marker, straight remaining, DRS closure if applicable',
+                vanTriggers: ['halo_obscuring_marker', 'closing_speed_panic', 'steering_display_check_on_approach', 'car_ahead_blocking_view'],
+                danFix: 'EARLY ACQUISITION through halo — at these speeds, late marker pickup is catastrophic. Eyes must find the reference through or around the halo bar well before the braking zone.'
+            },
             brake: {
                 minFixationSec: 0.5,
                 maxFixationSec: 1.1,
@@ -394,6 +464,16 @@ Every "Aware" instruction must reference direct steering feel and other kart awa
                 awareHint: 'Aware = throttle mapping through foot, steering wheel returning, G-force reducing, DRS activation zone if applicable',
                 vanTriggers: ['checking_small_mirrors', 'fixating_on_barrier', 'looking_at_steering_wheel_display', 'premature_DRS_check'],
                 danFix: 'High-speed exit commitment — eyes lock target, throttle mapping follows. No display checks until straight.'
+            },
+            nextMarker: {
+                minFixationSec: 0.4,
+                maxFixationSec: 1.2,
+                headLeadTimeSec: [0, 0],
+                peripheralType: 'acceleration_g_force_DRS',
+                eyesHint: 'Eyes SEARCH for next corner reference through halo — next distance board, barrier, or structure appearing at extreme speed',
+                awareHint: 'Aware = throttle deployment through foot, G-force building on acceleration, DRS activation zone, car stability',
+                vanTriggers: ['steering_display_delta_check', 'mirror_check_at_speed', 'DRS_activation_distraction', 'relaxation_on_straight'],
+                danFix: 'TRANSITION at speed — formula straights compress time. Next marker must be acquired immediately. DRS and display checks are VAN traps — eyes stay forward.'
             }
         },
 

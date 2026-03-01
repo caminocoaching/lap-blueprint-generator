@@ -256,10 +256,11 @@ const ConditioningEngine = {
         const lapStart = this._startTime;
         const lapEnd = this._endTime;
 
-        // Sort corners by time
+        // Normalize corner data — support both old format (brake/apex/exit objects)
+        // and new auto-detect format (brakeTime/apexTime/exitTime numbers or timestamps object)
         const corners = [...this._corners].sort((a, b) => {
-            const tA = (a.firstSight || a.brake || a.apex).time;
-            const tB = (b.firstSight || b.brake || b.apex).time;
+            const tA = this._getCornerTime(a, 'brake');
+            const tB = this._getCornerTime(b, 'brake');
             return tA - tB;
         });
 
@@ -267,76 +268,124 @@ const ConditioningEngine = {
 
         for (let i = 0; i < corners.length; i++) {
             const c = corners[i];
-            const brake = c.brake || c.firstSight || c.apex;
-            const apex = c.apex || c.brake;
-            const exit = c.exit || c.apex || c.brake;
+            const visRefs = c.visualReferences || c.gazeTargets || {};
+            const gazeSeq = c.gazeSequence || {};
+            const pauseCues = c.pauseCues || [];
+            const cornerName = c.name || `Corner ${c.number}`;
 
-            const approachStart = Math.max(lastEnd, brake.time - this.config.approachWindow);
+            // Get timestamps — support multiple formats
+            const brakeMarkerTime = c.brakeMarkerVisible || c.timestamps?.brakeMarkerVisible || null;
+            const brakeTime = this._getCornerTime(c, 'brake');
+            const apexTime = this._getCornerTime(c, 'apex');
+            const exitTime = this._getCornerTime(c, 'exit');
+            const nextMarkerTime = c.nextMarkerVisible || c.timestamps?.nextMarkerVisible || null;
 
-            // Straight before this corner
-            if (approachStart > lastEnd + 0.3) {
+            // ── Pause 1: Brake Marker Visible ──
+            if (brakeMarkerTime != null && brakeMarkerTime < brakeTime) {
+                const approachStart = Math.max(lastEnd, brakeMarkerTime - 1.0);
+
+                // Straight before this corner
+                if (approachStart > lastEnd + 0.3) {
+                    segments.push({
+                        type: 'straight',
+                        start: lastEnd,
+                        end: approachStart,
+                        cornerIndex: -1,
+                    });
+                }
+
                 segments.push({
-                    type: 'straight',
-                    start: lastEnd,
-                    end: approachStart,
-                    cornerIndex: -1,
-                });
-            }
-
-            // Approach zone
-            if (approachStart < brake.time) {
-                segments.push({
-                    type: 'approach',
-                    start: approachStart,
-                    end: brake.time,
+                    type: 'brakeMarkerVisible',
+                    start: brakeMarkerTime,
+                    end: brakeTime,
                     cornerIndex: i,
-                    gazePhase: 'firstSight',
-                    eyes: c.gazeTargets?.brake || 'braking reference',
-                    aware: c.gazeTargets?.apex || 'apex zone',
+                    gazePhase: 'brakeMarkerVisible',
+                    eyes: gazeSeq.brakeMarkerVisible?.eyes || pauseCues[0]?.eyes || visRefs.brakingReference || 'brake marker ahead',
+                    aware: gazeSeq.brakeMarkerVisible?.aware || pauseCues[0]?.aware || 'approach speed, straight remaining',
+                    cueLabel: gazeSeq.brakeMarkerVisible?.cueLabel || pauseCues[0]?.label || '',
+                    cornerName: cornerName,
+                    cornerType: c.cornerType || c.type,
+                    direction: c.direction,
                 });
+
+                lastEnd = brakeMarkerTime;
+            } else {
+                // No brakeMarkerVisible — use approach window as before
+                const approachStart = Math.max(lastEnd, brakeTime - this.config.approachWindow);
+
+                if (approachStart > lastEnd + 0.3) {
+                    segments.push({
+                        type: 'straight',
+                        start: lastEnd,
+                        end: approachStart,
+                        cornerIndex: -1,
+                    });
+                }
+
+                if (approachStart < brakeTime) {
+                    segments.push({
+                        type: 'brakeMarkerVisible',
+                        start: approachStart,
+                        end: brakeTime,
+                        cornerIndex: i,
+                        gazePhase: 'brakeMarkerVisible',
+                        eyes: gazeSeq.brakeMarkerVisible?.eyes || pauseCues[0]?.eyes || visRefs.brakingReference || 'braking reference',
+                        aware: gazeSeq.brakeMarkerVisible?.aware || pauseCues[0]?.aware || 'apex zone ahead',
+                        cueLabel: gazeSeq.brakeMarkerVisible?.cueLabel || pauseCues[0]?.label || '',
+                        cornerName: cornerName,
+                        cornerType: c.cornerType || c.type,
+                        direction: c.direction,
+                    });
+                }
             }
 
-            // Braking zone
+            // ── Pause 2: At Braking (Eyes Apex — Aware Exit) ──
             segments.push({
                 type: 'braking',
-                start: brake.time,
-                end: apex.time,
+                start: brakeTime,
+                end: apexTime,
                 cornerIndex: i,
                 gazePhase: 'brake',
-                eyes: c.gazeTargets?.brake || 'braking marker',
-                aware: c.gazeTargets?.apex || 'inside kerb',
-                cornerName: c.name || `Corner ${c.number}`,
-                cornerType: c.cornerType,
+                eyes: gazeSeq.brake?.eyes || pauseCues[1]?.eyes || visRefs.brakingReference || visRefs.brake || 'braking marker',
+                aware: gazeSeq.brake?.aware || pauseCues[1]?.aware || visRefs.apexFixation || visRefs.apex || 'inside kerb',
+                cueLabel: gazeSeq.brake?.cueLabel || pauseCues[1]?.label || '',
+                cornerName: cornerName,
+                cornerType: c.cornerType || c.type,
                 direction: c.direction,
                 quietEyeCue: c.quietEyeCue,
             });
 
-            // Apex zone
+            // ── Pause 3: Apex (Eyes Exit — Aware Straight) ──
             segments.push({
                 type: 'apex',
-                start: apex.time,
-                end: exit.time,
+                start: apexTime,
+                end: exitTime,
                 cornerIndex: i,
                 gazePhase: 'apex',
-                eyes: c.gazeTargets?.apex || 'inside kerb apex',
-                aware: c.gazeTargets?.exit || 'exit kerb',
-                cornerName: c.name || `Corner ${c.number}`,
-                cornerType: c.cornerType,
+                eyes: gazeSeq.apex?.eyes || pauseCues[2]?.eyes || visRefs.apexFixation || visRefs.apex || 'inside kerb apex',
+                aware: gazeSeq.apex?.aware || pauseCues[2]?.aware || visRefs.exitTarget || visRefs.exit || 'exit kerb',
+                cueLabel: gazeSeq.apex?.cueLabel || pauseCues[2]?.label || '',
+                cornerName: cornerName,
+                cornerType: c.cornerType || c.type,
                 direction: c.direction,
                 quietEyeCue: c.quietEyeCue,
             });
 
-            // Exit zone
-            const exitEnd = exit.time + this.config.holdWindow;
+            // ── Pause 4: Exit / Next Marker (Eyes Straight — Aware Braking Marker) ──
+            const exitEnd = nextMarkerTime != null
+                ? Math.min(nextMarkerTime + 1.0, lapEnd)
+                : Math.min(exitTime + this.config.holdWindow, lapEnd);
+
             segments.push({
                 type: 'exit',
-                start: exit.time,
-                end: Math.min(exitEnd, lapEnd),
+                start: exitTime,
+                end: exitEnd,
                 cornerIndex: i,
-                gazePhase: 'exit',
-                eyes: c.gazeTargets?.exit || 'exit kerb',
-                aware: 'next straight / braking zone',
-                cornerName: c.name || `Corner ${c.number}`,
+                gazePhase: nextMarkerTime != null ? 'nextMarker' : 'exit',
+                eyes: gazeSeq.nextMarker?.eyes || pauseCues[3]?.eyes || (nextMarkerTime != null ? 'next corner marker' : (visRefs.exitTarget || visRefs.exit || 'exit kerb')),
+                aware: gazeSeq.nextMarker?.aware || pauseCues[3]?.aware || 'next straight / braking zone',
+                cueLabel: gazeSeq.nextMarker?.cueLabel || pauseCues[3]?.label || '',
+                cornerName: cornerName,
             });
 
             lastEnd = Math.min(exitEnd, lapEnd);
@@ -352,8 +401,26 @@ const ConditioningEngine = {
             });
         }
 
-        console.log(`[ConditioningEngine] Built ${segments.length} timeline segments`);
+        console.log(`[ConditioningEngine] Built ${segments.length} timeline segments for ${corners.length} corners`);
         return segments;
+    },
+
+    /**
+     * Helper to get a corner timestamp from multiple possible formats.
+     * Supports: {brake: {time: N}}, {brakeTime: N}, {timestamps: {entry: N}}
+     */
+    _getCornerTime(corner, phase) {
+        // New auto-detect format: corner.brakeTime, corner.apexTime, corner.exitTime
+        if (phase === 'brake') {
+            return corner.brakeTime || corner.brake?.time || corner.timestamps?.entry || corner.firstSight?.time || 0;
+        }
+        if (phase === 'apex') {
+            return corner.apexTime || corner.apex?.time || corner.timestamps?.apex || 0;
+        }
+        if (phase === 'exit') {
+            return corner.exitTime || corner.exit?.time || corner.timestamps?.exit || 0;
+        }
+        return 0;
     },
 
 
@@ -421,9 +488,14 @@ const ConditioningEngine = {
     },
 
     _isGazePoint(segment, time) {
-        // Trigger pause at the start of braking and apex zones
-        if (segment.type === 'braking' && time < segment.start + 0.3) return true;
-        if (segment.type === 'apex' && time < segment.start + 0.3) return true;
+        // Trigger pause at the start of each gaze zone (4 points per corner)
+        const threshold = 0.3; // seconds from segment start to trigger pause
+        if (segment.type === 'brakeMarkerVisible' && time < segment.start + threshold) return true;
+        if (segment.type === 'braking' && time < segment.start + threshold) return true;
+        if (segment.type === 'apex' && time < segment.start + threshold) return true;
+        if (segment.type === 'exit' && segment.gazePhase === 'nextMarker' && time < segment.start + threshold) return true;
+        // Legacy: also pause on exit if no nextMarker phase
+        if (segment.type === 'exit' && segment.gazePhase === 'exit' && time < segment.start + threshold) return true;
         return false;
     },
 
@@ -534,16 +606,19 @@ const ConditioningEngine = {
 
         // Phase label
         const phaseLabels = {
+            brakeMarkerVisible: '👁 BRAKE MARKER VISIBLE',
             approach: '◎ APPROACH',
-            braking: '◉ BRAKE ZONE',
+            braking: '◉ AT BRAKING',
             apex: '◈ APEX',
-            exit: '◇ EXIT',
+            exit: '◇ EXIT / NEXT MARKER',
         };
         ctx.font = this.config.overlayFontTiny;
         ctx.fillStyle = 'rgba(255,255,255,0.6)';
         ctx.textAlign = 'center';
         ctx.textBaseline = 'top';
-        ctx.fillText(phaseLabels[segment.type] || segment.type.toUpperCase(), centerX, yPos);
+        // Use cueLabel from blueprint if available (e.g. "Eyes Braking Marker — Aware Apex")
+        const phaseText = segment.cueLabel || phaseLabels[segment.type] || segment.type.toUpperCase();
+        ctx.fillText(phaseText, centerX, yPos);
         yPos += 24;
 
         // "Eyes: [target]" line
@@ -567,6 +642,7 @@ const ConditioningEngine = {
     _drawMarkerOnly(ctx, w, h, segment) {
         // Lap 5: Just a small icon/symbol at the corner
         const icons = {
+            brakeMarkerVisible: '👁',
             approach: '◎',
             braking: '■',
             apex: '◆',
@@ -627,11 +703,12 @@ const ConditioningEngine = {
                 this._ctx.textBaseline = 'middle';
                 this._ctx.fillText(Math.ceil(remaining).toString(), centerX, centerY - 40);
 
-                // Quiet Eye cue
-                if (segment.quietEyeCue) {
+                // Quiet Eye cue — prefer cueLabel from blueprint (4-cue model)
+                const cueText = segment.cueLabel || segment.quietEyeCue || '';
+                if (cueText) {
                     this._ctx.font = this.config.overlayFont;
                     this._ctx.fillStyle = '#ffffff';
-                    this._ctx.fillText(segment.quietEyeCue, centerX, centerY + 30);
+                    this._ctx.fillText(cueText, centerX, centerY + 30);
                 }
 
                 // "Where are your eyes right now?"
@@ -763,17 +840,28 @@ const ConditioningEngine = {
         // Only play at segment start
         if (time > segment.start + 0.5) return;
 
+        // Map segment types to pre-recorded cue IDs and canonical 4-cue text
         const cueMap = {
-            braking: 'eyes_brakeMarker',
-            apex: 'eyes_apex',
-            exit: 'eyes_exit',
+            brakeMarkerVisible: { id: 'eyes_brakeMarker', text: 'Eyes... Braking Marker. Aware... Apex.' },
+            braking:            { id: 'eyes_apex',         text: 'Eyes... Apex. Aware... Exit.' },
+            apex:               { id: 'eyes_exit',         text: 'Eyes... Exit. Aware... Straight.' },
+            exit:               { id: 'eyes_straight',     text: 'Eyes... Straight. Aware... Braking Marker.' },
         };
 
-        const cueId = cueMap[segment.type];
-        if (cueId && this._voiceCues[cueId]) {
-            this._playCue(this._voiceCues[cueId]);
-            this._lastCuePlayed = cueKey;
+        const cue = cueMap[segment.type];
+        if (!cue) return;
+
+        if (this._voiceCues[cue.id]) {
+            // Play pre-recorded MP3 audio buffer
+            this._playCue(this._voiceCues[cue.id]);
+        } else if (typeof App !== 'undefined' && App.speakCueTTS) {
+            // Fallback to Web Speech TTS with the canonical cue text
+            // Use cueLabel from blueprint data if available, else use default
+            const text = segment.cueLabel || cue.text;
+            App.speakCueTTS(text);
         }
+
+        this._lastCuePlayed = cueKey;
     },
 
     _playCue(audioBuffer) {
