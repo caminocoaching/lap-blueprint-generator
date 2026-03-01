@@ -1,0 +1,1240 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lap Blueprint Builder — Quiet Eye Conditioning System</title>
+    <meta name="description"
+        content="Build scientific Quiet Eye lap blueprints with progressive 5-lap conditioning. Mark gaze lock-in points on onboard footage and generate automatic subconscious training videos.">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800;900&family=JetBrains+Mono:wght@400;500;700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="styles.css">
+</head>
+
+<body>
+    <!-- Loading Screen -->
+    <div id="loading-screen" class="loading-screen">
+        <div class="loading-content">
+            <div class="eye-scanner">
+                <div class="scanner-ring ring-1"></div>
+                <div class="scanner-ring ring-2"></div>
+                <div class="scanner-ring ring-3"></div>
+                <div class="scanner-dot"></div>
+            </div>
+            <h1 class="loading-title">LAP BLUEPRINT</h1>
+            <p class="loading-subtitle">Quiet Eye Conditioning System</p>
+            <div class="loading-bar">
+                <div class="loading-bar-fill"></div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main App -->
+    <div id="app" class="app hidden">
+        <!-- Header -->
+        <header class="header">
+            <div class="header-left">
+                <div class="logo">
+                    <div class="logo-eye">
+                        <div class="logo-pupil"></div>
+                    </div>
+                    <div class="logo-text">
+                        <span class="logo-title">LAP BLUEPRINT</span>
+                        <span class="logo-tag">Quiet Eye Builder</span>
+                    </div>
+                </div>
+            </div>
+            <nav class="header-nav">
+                <button class="nav-btn active" data-view="dashboard" id="nav-dashboard">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="3" y="3" width="7" height="7" rx="1" />
+                        <rect x="14" y="3" width="7" height="7" rx="1" />
+                        <rect x="3" y="14" width="7" height="7" rx="1" />
+                        <rect x="14" y="14" width="7" height="7" rx="1" />
+                    </svg>
+                    Library
+                </button>
+                <button class="nav-btn" data-view="builder" id="nav-builder">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83" />
+                    </svg>
+                    Builder
+                </button>
+                <button class="nav-btn" data-view="player" id="nav-player">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polygon points="5 3 19 12 5 21 5 3" />
+                    </svg>
+                    Conditioning Player
+                </button>
+                <button class="nav-btn" data-view="protocol" id="nav-protocol">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
+                    </svg>
+                    Protocol
+                </button>
+            </nav>
+            <div class="header-right">
+                <button class="settings-btn" id="settings-btn" title="Settings">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="12" cy="12" r="3" />
+                        <path
+                            d="M19.4 15a1.65 1.65 0 00.33 1.82l.06.06a2 2 0 01-2.83 2.83l-.06-.06a1.65 1.65 0 00-1.82-.33 1.65 1.65 0 00-1 1.51V21a2 2 0 01-4 0v-.09A1.65 1.65 0 009 19.4a1.65 1.65 0 00-1.82.33l-.06.06a2 2 0 01-2.83-2.83l.06-.06A1.65 1.65 0 004.68 15a1.65 1.65 0 00-1.51-1H3a2 2 0 010-4h.09A1.65 1.65 0 004.6 9a1.65 1.65 0 00-.33-1.82l-.06-.06a2 2 0 012.83-2.83l.06.06A1.65 1.65 0 009 4.68a1.65 1.65 0 001-1.51V3a2 2 0 014 0v.09a1.65 1.65 0 001 1.51 1.65 1.65 0 001.82-.33l.06-.06a2 2 0 012.83 2.83l-.06.06A1.65 1.65 0 0019.4 9a1.65 1.65 0 001.51 1H21a2 2 0 010 4h-.09a1.65 1.65 0 00-1.51 1z" />
+                    </svg>
+                </button>
+            </div>
+        </header>
+
+        <!-- Settings Modal -->
+        <div id="settings-modal" class="modal hidden">
+            <div class="modal-overlay"></div>
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h2>Settings</h2>
+                    <button class="modal-close" id="settings-close">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <!-- Blueprint Brain (Claude) -->
+                    <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                        <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 12px;">🧠 BLUEPRINT BRAIN — Quiet Eye Protocol Generation</h3>
+                        <div class="form-group">
+                            <label for="claude-key-input">Claude API Key</label>
+                            <input type="password" id="claude-key-input" placeholder="sk-ant-..." class="form-input">
+                            <p class="form-hint">Generates the Quiet Eye blueprint with gaze sequences, coaching cues, and training protocols. Get your key at <a href="https://console.anthropic.com/settings/keys" target="_blank" style="color: var(--accent-cyan);">console.anthropic.com</a></p>
+                        </div>
+                        <div class="form-group">
+                            <label for="claude-model-select">Claude Model</label>
+                            <select id="claude-model-select" class="form-input">
+                                <option value="claude-sonnet-4-5-20250929">Claude Sonnet 4.5 (Recommended)</option>
+                                <option value="claude-opus-4-5-20251101">Claude Opus 4.5 (Most Powerful)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Vision Engine (Gemini) -->
+                    <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                        <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--accent-orange); margin-bottom: 12px;">🎥 VISION ENGINE — Video & Corner Analysis</h3>
+                        <div class="form-group">
+                            <label for="api-key-input">Gemini API Key</label>
+                            <input type="password" id="api-key-input" placeholder="AIza..." class="form-input">
+                            <p class="form-hint">Powers AI corner detection from onboard video. Get yours free at <a href="https://aistudio.google.com/apikey" target="_blank" style="color: var(--accent-cyan);">aistudio.google.com</a></p>
+                        </div>
+                        <div class="form-group">
+                            <label for="model-select">Gemini Model</label>
+                            <select id="model-select" class="form-input">
+                                <option value="gemini-2.0-flash">Gemini 2.0 Flash (Recommended)</option>
+                                <option value="gemini-2.0-flash-lite">Gemini 2.0 Flash-Lite (Fastest)</option>
+                                <option value="gemini-2.5-pro-preview-05-06">Gemini 2.5 Pro (Best Quality)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Track Map Intelligence (OpenAI GPT-4o) -->
+                    <div style="margin-bottom: 24px; padding-bottom: 16px; border-bottom: 1px solid var(--border-subtle);">
+                        <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--accent-purple, #a78bfa); margin-bottom: 12px;">🗺️ TRACK MAP INTELLIGENCE — Spatial Corner Analysis</h3>
+                        <div class="form-group">
+                            <label for="openai-key-input">OpenAI API Key</label>
+                            <input type="password" id="openai-key-input" placeholder="sk-proj-..." class="form-input">
+                            <p class="form-hint">GPT-4o analyses track map images to understand corner geometry, elevation, camber &amp; braking zones. Get your key at <a href="https://platform.openai.com/api-keys" target="_blank" style="color: var(--accent-cyan);">platform.openai.com</a></p>
+                        </div>
+                    </div>
+
+                    <!-- Blueprint Provider Selector -->
+                    <div style="margin-bottom: 24px;">
+                        <h3 style="font-size: 0.85rem; font-weight: 700; color: var(--accent-green); margin-bottom: 12px;">⚙️ BLUEPRINT PROVIDER</h3>
+                        <div class="form-group">
+                            <label for="blueprint-provider-select">Generate blueprints with</label>
+                            <select id="blueprint-provider-select" class="form-input">
+                                <option value="claude">Claude (Best for QE science)</option>
+                                <option value="gemini">Gemini (Alternative)</option>
+                                <option value="demo">Demo Mode (No API needed)</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <button class="btn btn-primary" id="save-settings">Save Settings</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- ========== VIEW: DASHBOARD / LIBRARY ========== -->
+        <main id="view-dashboard" class="view active">
+            <div class="dashboard-hero">
+                <div class="hero-content">
+                    <div class="hero-badge">QUIET EYE CONDITIONING</div>
+                    <h1 class="hero-question" id="hero-question">
+                        <span class="hero-q-mark">"</span>What would a good lap <span class="gradient-text">feel</span>
+                        like?<span class="hero-q-mark">"</span>
+                    </h1>
+                    <p class="hero-desc">Close your eyes. See the track. Feel the flow before you ride it.<br>
+                        This system builds a 5-lap progressive conditioning video that programs
+                        your subconscious for automatic, in-flow performance.</p>
+                    <div class="hero-actions">
+                        <button class="btn btn-primary btn-lg" id="start-builder-btn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <circle cx="12" cy="12" r="3" />
+                                <path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4" />
+                            </svg>
+                            Build Your Blueprint
+                        </button>
+                    </div>
+                </div>
+                <div class="hero-visual">
+                    <div class="neuroscience-diagram">
+                        <div class="lap-structure-preview">
+                            <h3
+                                style="font-size: 0.8rem; font-weight: 700; margin-bottom: 16px; color: var(--accent-cyan);">
+                                5-LAP PROGRESSIVE STRUCTURE</h3>
+                            <div class="lap-tier">
+                                <div class="lap-tier-badge pause">L1–L2</div>
+                                <div class="lap-tier-info">
+                                    <div class="lap-tier-title">Full Pause Laps</div>
+                                    <div class="lap-tier-desc">5s pause at each gaze point · "Eyes [X] — Aware [Y]"
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="lap-tier">
+                                <div class="lap-tier-badge slow">L3</div>
+                                <div class="lap-tier-info">
+                                    <div class="lap-tier-title">Slow Lap (−10%)</div>
+                                    <div class="lap-tier-desc">No pauses · Full "Eyes [X] — Aware [Y]" cues</div>
+                                </div>
+                            </div>
+                            <div class="lap-tier">
+                                <div class="lap-tier-badge normal">L4</div>
+                                <div class="lap-tier-info">
+                                    <div class="lap-tier-title">Normal Pace</div>
+                                    <div class="lap-tier-desc">Awareness only · "Aware [Y]"</div>
+                                </div>
+                            </div>
+                            <div class="lap-tier">
+                                <div class="lap-tier-badge fast">L5</div>
+                                <div class="lap-tier-info">
+                                    <div class="lap-tier-title">Fast Lap (+10%)</div>
+                                    <div class="lap-tier-desc">Marker only · "[X]" — Automatic mode</div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Stats -->
+            <div class="stats-grid">
+                <div class="stat-card">
+                    <div class="stat-icon">🎬</div>
+                    <div class="stat-value" id="stat-blueprints">0</div>
+                    <div class="stat-label">Blueprints</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🏁</div>
+                    <div class="stat-value" id="stat-tracks">0</div>
+                    <div class="stat-label">Tracks</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">🔄</div>
+                    <div class="stat-value" id="stat-corners">0</div>
+                    <div class="stat-label">Corners Mapped</div>
+                </div>
+                <div class="stat-card">
+                    <div class="stat-icon">👁</div>
+                    <div class="stat-value" id="stat-sessions">0</div>
+                    <div class="stat-label">QE Sessions</div>
+                </div>
+            </div>
+
+            <!-- Blueprint Library -->
+            <section class="library-section">
+                <div class="section-header">
+                    <h2>Blueprint Library</h2>
+                    <span class="section-badge" id="library-count">0 blueprints</span>
+                </div>
+                <div class="library-grid" id="library-grid">
+                    <div class="empty-state">
+                        <div class="empty-icon">🎬</div>
+                        <h3>No Blueprints Yet</h3>
+                        <p>Build your first lap blueprint by loading an onboard video and marking the gaze lock-in
+                            points.</p>
+                    </div>
+                </div>
+            </section>
+        </main>
+
+        <!-- ========== VIEW: BUILDER ========== -->
+        <main id="view-builder" class="view">
+            <div class="builder-container">
+                <!-- Phase 1: Load Video -->
+                <div class="builder-phase" id="builder-phase-1">
+                    <div class="phase-header">
+                        <div class="phase-badge">STEP 1</div>
+                        <h2>Load Onboard Footage</h2>
+                        <p>Upload the raw onboard lap video. This should be a single clean lap.</p>
+                    </div>
+                    <div class="upload-zone" id="builder-upload-zone">
+                        <div class="upload-icon">🎬</div>
+                        <h3>Drop Onboard Video Here</h3>
+                        <p>or click to browse (MP4, MOV, WebM)</p>
+                        <input type="file" id="builder-video-input" accept="video/*"
+                            style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;">
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="builder-track">Track Name</label>
+                            <input type="text" id="builder-track" class="form-input"
+                                placeholder="e.g. Misano World Circuit">
+                        </div>
+                        <div class="form-group">
+                            <label for="builder-client">Client Name</label>
+                            <input type="text" id="builder-client" class="form-input" placeholder="e.g. Jonathan">
+                        </div>
+                    </div>
+                    <div class="form-row">
+                        <div class="form-group">
+                            <label for="builder-vehicle">Vehicle</label>
+                            <select id="builder-vehicle" class="form-input">
+                                <option value="motorcycle">Motorcycle</option>
+                                <option value="car">Car (GT/Touring)</option>
+                                <option value="kart">Kart</option>
+                                <option value="formula">Formula/Single-Seater</option>
+                            </select>
+                        </div>
+                        <div class="form-group">
+                            <label for="builder-skill">Skill Level</label>
+                            <select id="builder-skill" class="form-input">
+                                <option value="novice">Novice</option>
+                                <option value="intermediate">Intermediate</option>
+                                <option value="advanced">Advanced</option>
+                                <option value="elite">Elite</option>
+                            </select>
+                        </div>
+                    </div>
+
+                    <!-- Track Research -->
+                    <div class="form-row" style="align-items: flex-end;">
+                        <div class="form-group">
+                            <label for="builder-series">Series / Class Context</label>
+                            <input type="text" id="builder-series" class="form-input" placeholder="e.g. MotoGP, GT3, Club Track Day, BSB">
+                        </div>
+                        <div class="form-group" style="flex: 0 0 auto;">
+                            <button class="btn btn-primary" id="research-track-btn" style="background: linear-gradient(135deg, #8b5cf6 0%, #6d28d9 100%); border: none; padding: 10px 20px; font-weight: 700; white-space: nowrap;">
+                                🔍 Research Track for QE
+                            </button>
+                        </div>
+                    </div>
+                    <!-- Research Status -->
+                    <div id="research-status" class="hidden" style="margin-top: 8px; padding: 12px 16px; border-radius: 10px; background: rgba(139, 92, 246, 0.1); border: 1px solid rgba(139, 92, 246, 0.3);">
+                        <div style="display: flex; align-items: center; gap: 10px;">
+                            <div id="research-spinner" class="hidden" style="width: 18px; height: 18px; border: 2px solid rgba(139,92,246,0.3); border-top-color: #8b5cf6; border-radius: 50%; animation: spin 0.8s linear infinite;"></div>
+                            <span id="research-status-text" style="font-size: 0.85rem; color: var(--text-secondary);"></span>
+                        </div>
+                        <div id="research-result-summary" class="hidden" style="margin-top: 10px; font-size: 0.8rem; color: var(--text-muted); line-height: 1.5;"></div>
+                    </div>
+                    <style>@keyframes spin { to { transform: rotate(360deg); } }</style>
+
+                    <!-- Track Guide Upload -->
+                    <div style="margin-top: 16px; padding: 16px; border-radius: 12px; background: rgba(16, 185, 129, 0.06); border: 1px solid rgba(16, 185, 129, 0.2);">
+                        <div style="display: flex; align-items: center; gap: 10px; margin-bottom: 10px;">
+                            <span style="font-size: 1.2rem;">📄</span>
+                            <div>
+                                <div style="font-size: 0.85rem; font-weight: 700; color: var(--accent-green);">UPLOAD TRACK GUIDE (Optional)</div>
+                                <div style="font-size: 0.75rem; color: var(--text-muted);">Got a PDF track guide, corner-by-corner notes, or track map image? Upload it for deeper QE data extraction.</div>
+                            </div>
+                        </div>
+                        <div id="track-guide-drop" style="border: 2px dashed rgba(16,185,129,0.3); border-radius: 10px; padding: 20px; text-align: center; cursor: pointer; transition: all 0.2s ease;" onmouseover="this.style.borderColor='rgba(16,185,129,0.6)'" onmouseout="this.style.borderColor='rgba(16,185,129,0.3)'">
+                            <div style="font-size: 0.85rem; color: var(--text-secondary);">Drop PDF, image, or text file here — or click to browse</div>
+                            <div style="font-size: 0.75rem; color: var(--text-muted); margin-top: 4px;">Supports: PDF track guides, PNG/JPG track maps, TXT corner notes</div>
+                            <input type="file" id="track-guide-input" accept=".pdf,.png,.jpg,.jpeg,.webp,.txt,.md" style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;">
+                        </div>
+                        <div id="track-guide-status" class="hidden" style="margin-top: 10px; display: flex; align-items: center; gap: 8px;">
+                            <span id="track-guide-icon" style="font-size: 1rem;"></span>
+                            <span id="track-guide-text" style="font-size: 0.8rem; color: var(--text-secondary);"></span>
+                            <button id="track-guide-clear" class="btn btn-sm btn-outline" style="margin-left: auto; font-size: 0.7rem; padding: 4px 8px;">Clear</button>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Phase 1.5: Voice Cues -->
+                <div class="builder-phase" id="builder-phase-audio">
+                    <div class="phase-header">
+                        <div class="phase-badge">VOICE CUES</div>
+                        <h2>🎙 Upload Your Voice Cues</h2>
+                        <p>Record yourself saying each cue and upload the MP3 files. Your coaching voice is far more
+                            powerful for conditioning than computer-generated speech. <strong>Falls back to
+                                text-to-speech if no audio uploaded.</strong></p>
+                    </div>
+
+                    <!-- Full Cues (Laps 1–3) -->
+                    <div class="audio-cue-group">
+                        <div class="acg-header">
+                            <div class="acg-badge pause">L1–L3</div>
+                            <div class="acg-info">
+                                <div class="acg-title">Full Cues — "Eyes [X] — Aware [Y]"</div>
+                                <div class="acg-desc">Used during Pause Laps (L1–L2) and Slow Lap (L3)</div>
+                            </div>
+                        </div>
+                        <div class="audio-cue-grid">
+                            <div class="audio-cue-slot" data-cue-id="full_eyesBrake_awareApex">
+                                <div class="acs-label">"Eyes Braking Marker — Aware Apex"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="full_eyesBrake_awareApex">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="full_eyesBrake_awareApex">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="full_eyesBrake_awareApex">✕</button>
+                                    <span class="acs-status" data-cue-id="full_eyesBrake_awareApex"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="full_eyesApex_awareExit">
+                                <div class="acs-label">"Eyes Apex — Aware Exit"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="full_eyesApex_awareExit">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="full_eyesApex_awareExit">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="full_eyesApex_awareExit">✕</button>
+                                    <span class="acs-status" data-cue-id="full_eyesApex_awareExit"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="full_eyesExit_awareStraight">
+                                <div class="acs-label">"Eyes Exit — Aware Straight"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="full_eyesExit_awareStraight">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="full_eyesExit_awareStraight">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="full_eyesExit_awareStraight">✕</button>
+                                    <span class="acs-status" data-cue-id="full_eyesExit_awareStraight"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="full_eyesStraight_awareBrake">
+                                <div class="acs-label">"Eyes Straight — Aware Braking Marker"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="full_eyesStraight_awareBrake">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="full_eyesStraight_awareBrake">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="full_eyesStraight_awareBrake">✕</button>
+                                    <span class="acs-status" data-cue-id="full_eyesStraight_awareBrake"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Aware Cues (Lap 4) -->
+                    <div class="audio-cue-group">
+                        <div class="acg-header">
+                            <div class="acg-badge normal">L4</div>
+                            <div class="acg-info">
+                                <div class="acg-title">Awareness Cues — "Aware [Y]"</div>
+                                <div class="acg-desc">Normal pace lap — peripheral awareness only</div>
+                            </div>
+                        </div>
+                        <div class="audio-cue-grid">
+                            <div class="audio-cue-slot" data-cue-id="aware_apex">
+                                <div class="acs-label">"Aware Apex"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn" data-cue-id="aware_apex">📁
+                                        Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="aware_apex">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="aware_apex">✕</button>
+                                    <span class="acs-status" data-cue-id="aware_apex"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="aware_exit">
+                                <div class="acs-label">"Aware Exit"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn" data-cue-id="aware_exit">📁
+                                        Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="aware_exit">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="aware_exit">✕</button>
+                                    <span class="acs-status" data-cue-id="aware_exit"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="aware_straight">
+                                <div class="acs-label">"Aware Straight"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="aware_straight">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="aware_straight">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="aware_straight">✕</button>
+                                    <span class="acs-status" data-cue-id="aware_straight"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="aware_brakingMarker">
+                                <div class="acs-label">"Aware Braking Marker"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="aware_brakingMarker">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="aware_brakingMarker">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="aware_brakingMarker">✕</button>
+                                    <span class="acs-status" data-cue-id="aware_brakingMarker"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Marker Cues (Lap 5) -->
+                    <div class="audio-cue-group">
+                        <div class="acg-header">
+                            <div class="acg-badge fast">L5</div>
+                            <div class="acg-info">
+                                <div class="acg-title">Marker Cues — "[X]" Only</div>
+                                <div class="acg-desc">Fast lap — subconscious automatic mode</div>
+                            </div>
+                        </div>
+                        <div class="audio-cue-grid">
+                            <div class="audio-cue-slot" data-cue-id="marker_brakingMarker">
+                                <div class="acs-label">"Braking Marker"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="marker_brakingMarker">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="marker_brakingMarker">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="marker_brakingMarker">✕</button>
+                                    <span class="acs-status" data-cue-id="marker_brakingMarker"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="marker_apex">
+                                <div class="acs-label">"Apex"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn" data-cue-id="marker_apex">📁
+                                        Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="marker_apex">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="marker_apex">✕</button>
+                                    <span class="acs-status" data-cue-id="marker_apex"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="marker_exit">
+                                <div class="acs-label">"Exit"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn" data-cue-id="marker_exit">📁
+                                        Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="marker_exit">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="marker_exit">✕</button>
+                                    <span class="acs-status" data-cue-id="marker_exit"></span>
+                                </div>
+                            </div>
+                            <div class="audio-cue-slot" data-cue-id="marker_straight">
+                                <div class="acs-label">"Straight"</div>
+                                <div class="acs-controls">
+                                    <button class="btn btn-sm btn-outline acs-upload-btn"
+                                        data-cue-id="marker_straight">📁 Upload MP3</button>
+                                    <button class="btn btn-sm btn-outline acs-play-btn hidden"
+                                        data-cue-id="marker_straight">▶</button>
+                                    <button class="btn btn-sm btn-outline acs-clear-btn hidden"
+                                        data-cue-id="marker_straight">✕</button>
+                                    <span class="acs-status" data-cue-id="marker_straight"></span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Hidden file input for audio uploads -->
+                    <input type="file" id="audio-cue-file-input" accept="audio/*"
+                        style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;">
+                </div>
+
+                <!-- Phase 2: Mark Gaze Points -->
+                <div class="builder-phase hidden" id="builder-phase-2">
+                    <div class="phase-header">
+                        <div class="phase-badge">STEP 2</div>
+                        <h2>Trim Lap &amp; Mark Gaze Points</h2>
+                        <p>First, set the <strong>Lap Start</strong> and <strong>Lap End</strong> to trim the video to a
+                            single clean lap. Then mark 4 gaze lock-in points per corner.</p>
+                    </div>
+
+                    <!-- Video with Marker Controls -->
+                    <div class="marker-video-container">
+                        <div class="marker-video-wrap">
+                            <video id="marker-video" preload="auto"></video>
+                            <!-- Overlay for cue preview -->
+                            <div class="marker-overlay hidden" id="marker-overlay">
+                                <div class="marker-overlay-text" id="marker-overlay-text"></div>
+                            </div>
+                        </div>
+                        <div class="marker-video-controls">
+                            <button class="ctrl-btn" id="marker-play">▶</button>
+                            <button class="ctrl-btn" id="marker-rewind">⏪ 5s</button>
+                            <button class="ctrl-btn" id="marker-forward">5s ⏩</button>
+                            <span class="player-time" id="marker-time">0:00.0 / 0:00</span>
+                            <input type="range" class="player-seek" id="marker-seek" min="0" max="1000" value="0"
+                                step="0.1">
+                            <button class="ctrl-btn" id="marker-speed-btn">1×</button>
+                            <button class="ctrl-btn" id="marker-frame-back" title="Back 1 frame">◁</button>
+                            <button class="ctrl-btn" id="marker-frame-fwd" title="Forward 1 frame">▷</button>
+                        </div>
+                    </div>
+
+                    <!-- Lap Trim Panel -->
+                    <div class="lap-trim-panel">
+                        <div class="trim-header">
+                            <h3>✂️ Lap Boundaries</h3>
+                            <span class="trim-duration" id="trim-duration">Duration: —</span>
+                        </div>
+                        <div class="trim-markers">
+                            <div class="trim-marker-slot" id="trim-start-slot">
+                                <div class="tms-icon">🏁</div>
+                                <div class="tms-info">
+                                    <div class="tms-label">Lap Start</div>
+                                    <div class="tms-time" id="trim-start-time">—</div>
+                                </div>
+                                <button class="btn btn-sm btn-primary" id="trim-set-start">📌 Set Start</button>
+                            </div>
+                            <div class="trim-visual-bar" id="trim-visual-bar">
+                                <div class="trim-bar-fill" id="trim-bar-fill"></div>
+                                <div class="trim-bar-label" id="trim-bar-label">Set start and end to define the lap
+                                </div>
+                            </div>
+                            <div class="trim-marker-slot" id="trim-end-slot">
+                                <div class="tms-icon">🏁</div>
+                                <div class="tms-info">
+                                    <div class="tms-label">Lap End</div>
+                                    <div class="tms-time" id="trim-end-time">—</div>
+                                </div>
+                                <button class="btn btn-sm btn-primary" id="trim-set-end">📌 Set End</button>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- ═══════════════════════════════════════════════
+                         CORNER WIZARD — AI-Guided Interactive Marking
+                         ═══════════════════════════════════════════════ -->
+                    <div class="corner-wizard-panel" id="corner-wizard-panel">
+                        <div class="cw-header">
+                            <div class="cw-title">
+                                <div class="ai-icon-pulse">🎯</div>
+                                <div>
+                                    <h3>Corner Wizard</h3>
+                                    <p class="cw-subtitle">AI scans • You confirm • Frame-accurate marking</p>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Video Preview Canvas -->
+                        <div class="cw-canvas-container" id="cw-canvas-container">
+                            <canvas id="cw-canvas" style="width: 100%; display: block; border-radius: 10px;"></canvas>
+                        </div>
+
+                        <!-- Frame Controls -->
+                        <div class="cw-frame-controls">
+                            <div class="cw-step-group">
+                                <button class="btn btn-sm btn-outline cw-step-btn" id="cw-back-5"
+                                    title="Back 5 frames">◀◀</button>
+                                <button class="btn btn-sm btn-outline cw-step-btn" id="cw-back-1"
+                                    title="Back 1 frame">◀</button>
+                                <button class="btn btn-sm btn-outline cw-step-btn" id="cw-slow-play"
+                                    title="Slow play (0.25x)">▶ Slow</button>
+                                <button class="btn btn-sm btn-outline cw-step-btn" id="cw-pause"
+                                    title="Pause">⏸</button>
+                                <button class="btn btn-sm btn-outline cw-step-btn" id="cw-fwd-1"
+                                    title="Forward 1 frame">▶</button>
+                                <button class="btn btn-sm btn-outline cw-step-btn" id="cw-fwd-5"
+                                    title="Forward 5 frames">▶▶</button>
+                            </div>
+                            <div class="cw-time-display" id="cw-time-display">0:00.00</div>
+                        </div>
+
+                        <!-- AI Status Message -->
+                        <div class="cw-status" id="cw-status">
+                            <div class="cw-status-text" id="cw-status-text">
+                                Upload a video and set lap start/end, then click <strong>Scan for Corners</strong>
+                            </div>
+                        </div>
+
+                        <!-- Action Buttons -->
+                        <div class="cw-actions">
+                            <div class="cw-action-row" id="cw-scan-row">
+                                <button class="btn btn-primary cw-scan-btn" id="cw-scan-btn"
+                                    style="background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); border: none; font-weight: 700; padding: 12px 24px; font-size: 16px;">
+                                    🔍 Scan for Next Corner
+                                </button>
+                                <button class="btn btn-outline" id="cw-finish-btn" style="padding: 12px 20px;">
+                                    ✅ Finish Marking
+                                </button>
+                            </div>
+
+                            <div class="cw-action-row hidden" id="cw-confirm-row">
+                                <button class="btn cw-confirm-btn" id="cw-confirm-btn"
+                                    style="background: #10b981; color: white; border: none; padding: 12px 28px; font-weight: 700; font-size: 16px; border-radius: 10px;">
+                                    ✓ Confirm
+                                </button>
+                                <button class="btn btn-outline" id="cw-skip-btn" style="padding: 12px 20px;">
+                                    ⏭ Skip
+                                </button>
+                            </div>
+
+                            <!-- Manual Mark Buttons (always visible as fallback) -->
+                            <div class="cw-manual-row" id="cw-manual-row">
+                                <span class="cw-manual-label">Manual:</span>
+                                <button class="btn btn-sm cw-manual-btn" id="cw-mark-brake"
+                                    style="background: rgba(255,107,53,0.2); color: #ff6b35; border: 1px solid rgba(255,107,53,0.4);">
+                                    🎯 Brake
+                                </button>
+                                <button class="btn btn-sm cw-manual-btn" id="cw-mark-apex"
+                                    style="background: rgba(0,240,255,0.15); color: #00f0ff; border: 1px solid rgba(0,240,255,0.3);">
+                                    ◎ Apex
+                                </button>
+                                <button class="btn btn-sm cw-manual-btn" id="cw-mark-exit"
+                                    style="background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3);">
+                                    ➡ Exit
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Current Corner Progress -->
+                        <div class="cw-corner-progress hidden" id="cw-corner-progress">
+                            <div class="cw-cp-title" id="cw-cp-title">Corner 1</div>
+                            <div class="cw-cp-markers">
+                                <div class="cw-cp-marker" id="cw-cp-brake">
+                                    <span class="cw-cp-dot" style="background: #ff6b35;">●</span>
+                                    <span class="cw-cp-label">Brake</span>
+                                    <span class="cw-cp-time" id="cw-cp-brake-time">—</span>
+                                </div>
+                                <div class="cw-cp-arrow">→</div>
+                                <div class="cw-cp-marker" id="cw-cp-apex">
+                                    <span class="cw-cp-dot" style="background: #00f0ff;">●</span>
+                                    <span class="cw-cp-label">Apex</span>
+                                    <span class="cw-cp-time" id="cw-cp-apex-time">—</span>
+                                </div>
+                                <div class="cw-cp-arrow">→</div>
+                                <div class="cw-cp-marker" id="cw-cp-exit">
+                                    <span class="cw-cp-dot" style="background: #10b981;">●</span>
+                                    <span class="cw-cp-label">Exit</span>
+                                    <span class="cw-cp-time" id="cw-cp-exit-time">—</span>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Completed Corners List -->
+                        <div class="cw-corners-list" id="cw-corners-list">
+                            <!-- Dynamically populated -->
+                        </div>
+                    </div>
+
+                    <!-- AI Lap Analysis Panel (Legacy — kept for fallback) -->
+                    <div class="ai-analysis-panel" id="ai-analysis-panel">
+                        <div class="ai-panel-header">
+                            <div class="ai-panel-title">
+                                <div class="ai-icon-pulse">🤖</div>
+                                <div>
+                                    <h3>AI Lap Analysis Engine</h3>
+                                    <p class="ai-subtitle">Bidirectional pitch, roll &amp; optical flow detection —
+                                        Forward + Reverse passes</p>
+                                </div>
+                            </div>
+                            <div class="ai-panel-badge">EXPERIMENTAL</div>
+                        </div>
+
+                        <!-- Track Map Upload (Optional) -->
+                        <div class="ai-track-map-section">
+                            <div class="ai-section-label">
+                                <span class="ai-label-icon">🗺</span>
+                                Track Map (Optional — improves spatial accuracy)
+                            </div>
+                            <div class="ai-track-map-drop" id="ai-track-map-drop">
+                                <input type="file" id="ai-track-map-input" accept="image/*"
+                                    style="position:absolute;width:1px;height:1px;opacity:0;overflow:hidden;pointer-events:none;">
+                                <div class="ai-map-placeholder" id="ai-map-placeholder">
+                                    <span class="ai-map-icon">📎</span>
+                                    <span>Drop track map image or click to upload</span>
+                                </div>
+                                <img class="ai-map-preview hidden" id="ai-map-preview" alt="Track map">
+                            </div>
+                        </div>
+
+                        <!-- Analysis Controls -->
+                        <div class="ai-controls-row">
+                            <div class="ai-sensitivity">
+                                <label class="ai-control-label">Detection Sensitivity</label>
+                                <div class="ai-sensitivity-slider-wrap">
+                                    <span class="ai-sens-label">Low</span>
+                                    <input type="range" class="ai-sensitivity-slider" id="ai-sensitivity" min="0"
+                                        max="100" value="50" step="1">
+                                    <span class="ai-sens-label">High</span>
+                                </div>
+                            </div>
+                            <div class="ai-sample-rate">
+                                <label class="ai-control-label">Sample Rate</label>
+                                <select class="form-select" id="ai-sample-rate">
+                                    <option value="5">5 fps (Fast)</option>
+                                    <option value="10" selected>10 fps (Balanced)</option>
+                                    <option value="15">15 fps (Detailed)</option>
+                                    <option value="20">20 fps (Maximum)</option>
+                                </select>
+                            </div>
+                            <button class="btn btn-primary btn-ai-analyze" id="ai-analyze-btn">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                    stroke-width="2">
+                                    <circle cx="11" cy="11" r="8" />
+                                    <path d="m21 21-4.35-4.35" />
+                                </svg>
+                                Analyze Lap
+                            </button>
+                        </div>
+
+                        <!-- Progress -->
+                        <div class="ai-progress hidden" id="ai-progress">
+                            <div class="ai-progress-bar">
+                                <div class="ai-progress-fill" id="ai-progress-fill"></div>
+                            </div>
+                            <div class="ai-progress-status" id="ai-progress-status">Starting analysis...</div>
+                        </div>
+
+                        <!-- Signal Waveform Chart -->
+                        <div class="ai-signals hidden" id="ai-signals">
+                            <div class="ai-section-label">
+                                <span class="ai-label-icon">📊</span>
+                                Signal Analysis — Pitch, Roll &amp; Optical Flow
+                            </div>
+                            <div class="ai-chart-wrap" id="ai-chart-wrap"></div>
+                            <div class="ai-chart-legend">
+                                <span class="ai-legend-item"><span class="ai-legend-dot"
+                                        style="background:rgba(0,240,255,0.7)"></span> Horizon (Pitch)</span>
+                                <span class="ai-legend-item"><span class="ai-legend-dot"
+                                        style="background:rgba(255,107,53,0.8)"></span> Pitch Rate (Brake Signal)</span>
+                                <span class="ai-legend-item"><span class="ai-legend-dot"
+                                        style="background:rgba(124,58,237,0.7)"></span> Roll (Corner Direction)</span>
+                                <span class="ai-legend-item"><span class="ai-legend-dot"
+                                        style="background:rgba(16,185,129,0.5)"></span> Flow (Speed Proxy)</span>
+                                <span class="ai-legend-item"><span class="ai-legend-line solid"></span> Bidirectional
+                                    ✓✓</span>
+                                <span class="ai-legend-item"><span class="ai-legend-line dashed"></span>
+                                    Single-pass</span>
+                            </div>
+                        </div>
+
+                        <!-- Detected Corners List -->
+                        <div class="ai-results hidden" id="ai-results">
+                            <div class="ai-results-header">
+                                <div class="ai-section-label">
+                                    <span class="ai-label-icon">🎯</span>
+                                    Detected Corners
+                                </div>
+                                <div class="ai-results-actions">
+                                    <button class="btn btn-sm btn-outline" id="ai-accept-all">✓ Accept All</button>
+                                    <button class="btn btn-sm btn-primary" id="ai-apply-btn">
+                                        ⚡ Apply as Gaze Points
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Corner Preview Viewer -->
+                            <div class="ai-preview-viewer hidden" id="ai-preview-viewer">
+                                <div class="ai-pv-header">
+                                    <button class="ai-pv-nav" id="ai-pv-prev" title="Previous corner">◀</button>
+                                    <div class="ai-pv-title" id="ai-pv-title">Corner 1 — Right</div>
+                                    <button class="ai-pv-nav" id="ai-pv-next" title="Next corner">▶</button>
+                                    <div class="ai-pv-controls">
+                                        <button class="ai-cc-btn" id="ai-pv-accept" title="Accept">✓</button>
+                                        <button class="ai-cc-btn" id="ai-pv-reject" title="Reject">✕</button>
+                                    </div>
+                                </div>
+                                <div class="ai-pv-thumbnails">
+                                    <div class="ai-pv-thumb-slot" id="ai-pv-sight">
+                                        <div class="ai-pv-thumb-label sight">👁 FIRST SIGHT</div>
+                                        <img class="ai-pv-thumb-img" id="ai-pv-sight-img" alt="First sight">
+                                        <div class="ai-pv-thumb-time" id="ai-pv-sight-time">—</div>
+                                        <button class="ai-pv-seek-btn" id="ai-pv-sight-seek">▶ Seek to this
+                                            frame</button>
+                                    </div>
+                                    <div class="ai-pv-thumb-slot" id="ai-pv-brake">
+                                        <div class="ai-pv-thumb-label brake">🎯 BRAKE</div>
+                                        <img class="ai-pv-thumb-img" id="ai-pv-brake-img" alt="Brake point">
+                                        <div class="ai-pv-thumb-time" id="ai-pv-brake-time">—</div>
+                                        <button class="ai-pv-seek-btn" id="ai-pv-brake-seek">▶ Seek to this
+                                            frame</button>
+                                    </div>
+                                    <div class="ai-pv-thumb-slot" id="ai-pv-apex">
+                                        <div class="ai-pv-thumb-label apex">◎ APEX</div>
+                                        <img class="ai-pv-thumb-img" id="ai-pv-apex-img" alt="Apex point">
+                                        <div class="ai-pv-thumb-time" id="ai-pv-apex-time">—</div>
+                                        <button class="ai-pv-seek-btn" id="ai-pv-apex-seek">▶ Seek to this
+                                            frame</button>
+                                    </div>
+                                    <div class="ai-pv-thumb-slot" id="ai-pv-exit">
+                                        <div class="ai-pv-thumb-label exit">➡ EXIT</div>
+                                        <img class="ai-pv-thumb-img" id="ai-pv-exit-img" alt="Exit point">
+                                        <div class="ai-pv-thumb-time" id="ai-pv-exit-time">—</div>
+                                        <button class="ai-pv-seek-btn" id="ai-pv-exit-seek">▶ Seek to this
+                                            frame</button>
+                                    </div>
+                                </div>
+                                <div class="ai-pv-confidence-row">
+                                    <span class="ai-pv-conf-label">Confidence:</span>
+                                    <div class="ai-pv-conf-bar-lg">
+                                        <div class="ai-pv-conf-fill-lg" id="ai-pv-conf-fill"></div>
+                                    </div>
+                                    <span class="ai-pv-conf-text" id="ai-pv-conf-text">—</span>
+                                    <span class="ai-pv-bidir hidden" id="ai-pv-bidir">✓✓ Bidirectional</span>
+                                </div>
+                            </div>
+                            <div class="ai-corners-list" id="ai-corners-list"></div>
+
+                            <!-- BUILD CONDITIONING VIDEO button -->
+                            <div class="conditioning-launch" id="conditioning-launch" style="margin-top: 16px;">
+                                <button class="btn btn-lg btn-accent" id="build-conditioning-btn"
+                                    style="width: 100%; font-size: 18px; padding: 16px; background: linear-gradient(135deg, #00c6ff 0%, #0072ff 100%); border: none; border-radius: 12px; color: white; font-weight: 700; letter-spacing: 0.5px; cursor: pointer; transition: all 0.3s ease; box-shadow: 0 4px 20px rgba(0,100,255,0.3);">
+                                    🎬 Build 5-Lap Conditioning Video
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- ═══ CONDITIONING VIDEO PLAYER ═══ -->
+                        <div class="conditioning-player hidden" id="conditioning-player">
+                            <div class="conditioning-header">
+                                <div class="ai-section-label">
+                                    <span class="ai-label-icon">🎬</span>
+                                    Quiet Eye Conditioning Video
+                                </div>
+                                <div class="conditioning-controls">
+                                    <button class="btn btn-sm btn-outline" id="cond-preview-btn"
+                                        title="Preview single lap">
+                                        ▶ Preview L1
+                                    </button>
+                                    <button class="btn btn-sm btn-primary" id="cond-play-5-btn"
+                                        title="Play full 5-lap conditioning">
+                                        ▶▶ Play 5-Lap
+                                    </button>
+                                    <button class="btn btn-sm btn-outline" id="cond-stop-btn" title="Stop" disabled>
+                                        ■ Stop
+                                    </button>
+                                    <button class="btn btn-sm btn-accent" id="cond-export-btn"
+                                        title="Export as video file"
+                                        style="background: linear-gradient(135deg, #ff6b35 0%, #f7931e 100%); border: none; color: white;">
+                                        📥 Export Video
+                                    </button>
+                                </div>
+                            </div>
+
+                            <!-- Canvas Player -->
+                            <div class="conditioning-canvas-wrap" id="cond-canvas-wrap"
+                                style="position: relative; background: #000; border-radius: 12px; overflow: hidden; margin-top: 12px; aspect-ratio: 16/9;">
+                                <canvas id="conditioning-canvas"
+                                    style="width: 100%; height: 100%; display: block;"></canvas>
+                                <!-- Overlay for status -->
+                                <div id="cond-overlay"
+                                    style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; pointer-events: none;">
+                                    <div id="cond-status-text"
+                                        style="color: rgba(255,255,255,0.7); font-size: 16px; font-weight: 500;"></div>
+                                </div>
+                            </div>
+
+                            <!-- Progress -->
+                            <div class="conditioning-progress" style="margin-top: 12px;">
+                                <div
+                                    style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                                    <span id="cond-lap-label"
+                                        style="font-size: 14px; font-weight: 600; color: var(--text-secondary);">Ready</span>
+                                    <span id="cond-progress-pct"
+                                        style="font-size: 13px; color: var(--text-muted);">0%</span>
+                                </div>
+                                <div
+                                    style="height: 6px; background: rgba(255,255,255,0.1); border-radius: 3px; overflow: hidden;">
+                                    <div id="cond-progress-fill"
+                                        style="height: 100%; width: 0%; background: linear-gradient(90deg, #00c6ff, #0072ff); border-radius: 3px; transition: width 0.2s ease;">
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- Export Download -->
+                            <div class="conditioning-export hidden" id="cond-export-area"
+                                style="margin-top: 12px; padding: 16px; background: rgba(0,200,100,0.1); border-radius: 12px; border: 1px solid rgba(0,200,100,0.3);">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <span style="font-size: 32px;">✅</span>
+                                    <div>
+                                        <div style="font-weight: 600; color: var(--text-primary);">Video Ready!</div>
+                                        <div style="font-size: 13px; color: var(--text-muted);" id="cond-export-size">—
+                                        </div>
+                                    </div>
+                                    <a class="btn btn-sm btn-primary" id="cond-download-link"
+                                        download="ruapuna-conditioning.webm"
+                                        style="margin-left: auto; text-decoration: none;">
+                                        ⬇ Download
+                                    </a>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Current Corner Marker Panel -->
+                    <div class="marker-panel">
+                        <div class="marker-panel-header">
+                            <h3 id="marker-corner-title">Corner 1</h3>
+                            <div class="marker-panel-actions">
+                                <select class="form-select corner-type-select" id="marker-corner-type">
+                                    <option value="right">↱ Right</option>
+                                    <option value="left">↰ Left</option>
+                                    <option value="hairpin">↩ Hairpin</option>
+                                    <option value="chicane">⇌ Chicane</option>
+                                    <option value="kink">〰 Kink</option>
+                                    <option value="complex">⟲ Complex</option>
+                                </select>
+                                <input type="text" class="form-input corner-name-input" id="marker-corner-name"
+                                    placeholder="Corner Name (e.g. T1 Variante del Parco)">
+                            </div>
+                        </div>
+
+                        <div class="gaze-point-grid">
+                            <div class="gaze-point-card" data-point="firstSight">
+                                <div class="gp-header">
+                                    <div class="gp-icon brake">👁</div>
+                                    <div class="gp-label">First Sight of Braking Marker</div>
+                                </div>
+                                <div class="gp-timestamp" id="gp-firstSight-time">—</div>
+                                <div class="gp-cue">Eyes Braking Marker — Aware Apex</div>
+                                <button class="btn btn-sm btn-primary gp-mark-btn" data-point="firstSight">📌 Mark
+                                    Now</button>
+                            </div>
+                            <div class="gaze-point-card" data-point="brakingMarker">
+                                <div class="gp-header">
+                                    <div class="gp-icon apex">🎯</div>
+                                    <div class="gp-label">At Braking Marker</div>
+                                </div>
+                                <div class="gp-timestamp" id="gp-brakingMarker-time">—</div>
+                                <div class="gp-cue">Eyes Apex — Aware Exit</div>
+                                <button class="btn btn-sm btn-primary gp-mark-btn" data-point="brakingMarker">📌 Mark
+                                    Now</button>
+                            </div>
+                            <div class="gaze-point-card" data-point="apex">
+                                <div class="gp-header">
+                                    <div class="gp-icon exit">🔄</div>
+                                    <div class="gp-label">At Apex</div>
+                                </div>
+                                <div class="gp-timestamp" id="gp-apex-time">—</div>
+                                <div class="gp-cue">Eyes Exit — Aware Straight</div>
+                                <button class="btn btn-sm btn-primary gp-mark-btn" data-point="apex">📌 Mark
+                                    Now</button>
+                            </div>
+                            <div class="gaze-point-card" data-point="exit">
+                                <div class="gp-header">
+                                    <div class="gp-icon straight">➡️</div>
+                                    <div class="gp-label">At Exit / Rumble Strip</div>
+                                </div>
+                                <div class="gp-timestamp" id="gp-exit-time">—</div>
+                                <div class="gp-cue">Eyes Straight — Aware Braking Marker</div>
+                                <button class="btn btn-sm btn-primary gp-mark-btn" data-point="exit">📌 Mark
+                                    Now</button>
+                            </div>
+                        </div>
+
+                        <div class="marker-nav">
+                            <button class="btn btn-outline" id="marker-prev-corner">← Previous Corner</button>
+                            <button class="btn btn-primary" id="marker-next-corner">Save & Next Corner →</button>
+                            <button class="btn btn-outline" id="marker-finish" style="display:none;">✓ Finish
+                                Marking</button>
+                        </div>
+                    </div>
+
+                    <!-- Marked Corners Summary -->
+                    <div class="corners-summary" id="corners-summary">
+                        <h3>Marked Corners</h3>
+                        <div id="corners-summary-list"></div>
+                    </div>
+
+                    <!-- Build Blueprint Button -->
+                    <div class="build-action" id="build-action" style="display:none;">
+                        <button class="btn btn-primary btn-lg btn-generate" id="build-blueprint-btn">
+                            <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+                                stroke-width="2">
+                                <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                            </svg>
+                            Build 5-Lap Blueprint
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </main>
+
+        <!-- ========== VIEW: CONDITIONING PLAYER ========== -->
+        <main id="view-player" class="view">
+            <div id="player-container" class="player-container">
+                <div class="empty-state">
+                    <div class="empty-icon">▶️</div>
+                    <h3>No Blueprint Selected</h3>
+                    <p>Build a blueprint first, then come here to run the 5-lap conditioning session.</p>
+                </div>
+            </div>
+        </main>
+
+        <!-- ========== VIEW: PROTOCOL ========== -->
+        <main id="view-protocol" class="view">
+            <div class="protocol-container" id="protocol-display">
+                <div class="protocol-header">
+                    <h1>Quiet Eye Conditioning Protocol</h1>
+                    <p>The scientific method behind the 5-lap blueprint system</p>
+                </div>
+
+                <!-- 5-Lap Structure -->
+                <div class="protocol-section">
+                    <h2><span class="section-icon">🏁</span> The 5-Lap Progressive Structure</h2>
+                    <div class="protocol-step">
+                        <div class="protocol-step-number"
+                            style="background: rgba(255,107,53,0.15); color: var(--phase-brake);">1</div>
+                        <div class="protocol-step-content">
+                            <h3>Laps 1–2: Full Pause Conditioning</h3>
+                            <p>Video <strong>pauses for 5 seconds</strong> at every gaze lock-in point. Audio + visual
+                                cues play: <em>"Eyes [target] — Aware [next point]"</em>. This forces conscious
+                                processing — your brain maps exactly where to look and what to be peripherally aware of
+                                at every moment of the lap.</p>
+                        </div>
+                    </div>
+                    <div class="protocol-step">
+                        <div class="protocol-step-number"
+                            style="background: rgba(245,158,11,0.15); color: var(--accent-orange);">3</div>
+                        <div class="protocol-step-content">
+                            <h3>Lap 3: Slow Lap (−10% speed)</h3>
+                            <p>Video plays at <strong>90% speed, no pauses</strong>. Same full "Eyes — Aware" cues
+                                appear as audio + visual overlays. The brain now processes the gaze sequence in
+                                real-time at a comfortable pace. The extra time allows full absorption.</p>
+                        </div>
+                    </div>
+                    <div class="protocol-step">
+                        <div class="protocol-step-number"
+                            style="background: rgba(16,185,129,0.15); color: var(--accent-green);">4</div>
+                        <div class="protocol-step-content">
+                            <h3>Lap 4: Normal Pace — Awareness Only</h3>
+                            <p>Video plays at <strong>normal speed</strong>. Cues now only show <em>"Aware [next
+                                    point]"</em> — the "Eyes" part is dropped because your gaze should already be
+                                locking on automatically. The peripheral awareness cue keeps the brain's spatial map
+                                active.</p>
+                        </div>
+                    </div>
+                    <div class="protocol-step">
+                        <div class="protocol-step-number"
+                            style="background: rgba(239,68,68,0.15); color: var(--accent-red);">5</div>
+                        <div class="protocol-step-content">
+                            <h3>Lap 5: Fast Lap (+10% speed) — Markers Only</h3>
+                            <p>Video plays at <strong>110% speed</strong>. Only the bare marker names flash:
+                                <em>"Apex"</em>, <em>"Exit"</em>. The conscious mind is removed — your subconscious
+                                executes the gaze sequence automatically. This is <strong>flow state
+                                    preparation</strong>.
+                            </p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Neuroscience -->
+                <div class="protocol-section">
+                    <h2><span class="section-icon">🧠</span> Why This Works: DAN vs VAN</h2>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.7; margin-bottom: 16px;">
+                        The brain has two attention networks that compete during driving:
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div
+                            style="background: rgba(0, 240, 255, 0.06); border: 1px solid rgba(0, 240, 255, 0.2); border-radius: var(--radius-md); padding: 16px;">
+                            <div
+                                style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700; color: var(--accent-cyan); margin-bottom: 8px;">
+                                DAN — Dorsal Attention</div>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;">Goal-directed
+                                focus. The "Eyes [target]" cue activates DAN — it tells the brain WHERE to look
+                                proactively. Elite drivers have DAN dominant at all times.</p>
+                        </div>
+                        <div
+                            style="background: rgba(239, 68, 68, 0.06); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: var(--radius-md); padding: 16px;">
+                            <div
+                                style="font-family: var(--font-mono); font-size: 0.85rem; font-weight: 700; color: var(--accent-red); margin-bottom: 8px;">
+                                VAN — Ventral Attention</div>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary); line-height: 1.6;">
+                                Stimulus-driven / reactive / panic. VAN fires when danger surprises you. Target fixation
+                                = VAN hijack. The progressive laps suppress VAN by removing uncertainty.</p>
+                        </div>
+                    </div>
+                    <div class="protocol-callout" style="margin-top: 16px;">
+                        <p>By Lap 5, DAN is so well-programmed that VAN has nothing to react to. The gaze sequence runs
+                            automatically. <strong>This is the Quiet Eye state.</strong></p>
+                    </div>
+                </div>
+
+                <!-- Daily Protocol -->
+                <div class="protocol-section">
+                    <h2><span class="section-icon">📋</span> Daily Training</h2>
+                    <div class="protocol-callout">
+                        <p>"This isn't meditation. It's measurement. 15 minutes a day is enough to train the system
+                            without fatigue."</p>
+                    </div>
+                    <div class="protocol-step" style="margin-top: 16px;">
+                        <div class="protocol-step-number">1</div>
+                        <div class="protocol-step-content">
+                            <h3>Run the 5-Lap Blueprint <span
+                                    style="color: var(--text-tertiary); font-weight: 400;">(12–15 min)</span></h3>
+                            <p>Play through all 5 laps. During Laps 1–2, use the pauses to speak the cues aloud (Look &
+                                Call). By Laps 4–5, just watch and let the subconscious absorb.</p>
+                        </div>
+                    </div>
+                    <div class="protocol-step">
+                        <div class="protocol-step-number">2</div>
+                        <div class="protocol-step-content">
+                            <h3>Weak Corner Reps <span style="color: var(--text-tertiary); font-weight: 400;">(3
+                                    min)</span></h3>
+                            <p>Identify corners where your eye locks feel uncertain. Replay those corners on Laps 1–2
+                                three times. <strong>3 reps: enough to learn, not enough to fatigue.</strong></p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Look & Call -->
+                <div class="protocol-section">
+                    <h2><span class="section-icon">🗣</span> Look & Call Principle</h2>
+                    <p style="color: var(--text-secondary); font-size: 0.85rem; line-height: 1.7; margin-bottom: 16px;">
+                        Quiet Eye requires one clear decision: <strong>"This is the target."</strong>
+                    </p>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px;">
+                        <div
+                            style="background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.2); border-radius: var(--radius-md); padding: 16px;">
+                            <div
+                                style="font-size: 0.75rem; font-weight: 700; color: var(--accent-red); margin-bottom: 8px;">
+                                ❌ INTERNAL ONLY</div>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary);">"Maybe this... or that... I'll
+                                see how it feels"</p>
+                            <p style="font-size: 0.75rem; color: var(--accent-red); margin-top: 8px;">Softness = Eye
+                                Movement = VAN fires</p>
+                        </div>
+                        <div
+                            style="background: rgba(16, 185, 129, 0.08); border: 1px solid rgba(16, 185, 129, 0.2); border-radius: var(--radius-md); padding: 16px;">
+                            <div
+                                style="font-size: 0.75rem; font-weight: 700; color: var(--accent-green); margin-bottom: 8px;">
+                                ✅ SAY IT OUT LOUD</div>
+                            <p style="font-size: 0.8rem; color: var(--text-secondary);">Decision becomes binary. Brain
+                                stops searching. Eyes commit.</p>
+                            <p style="font-size: 0.75rem; color: var(--accent-green); margin-top: 8px;">Speech = DAN
+                                Locked = Quiet Eye</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </main>
+    </div>
+
+    <script src="ai-engine.js"></script>
+    <script src="blueprint-renderer.js"></script>
+    <script src="lap-analyzer.js"></script>
+    <script src="vision-analyzer.js"></script>
+    <script src="corner-wizard.js"></script>
+    <script src="conditioning-engine.js"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

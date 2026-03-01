@@ -1,0 +1,348 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <title>Voice Cue Assignment Tool</title>
+    <style>
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', system-ui, sans-serif;
+            background: #0a0b1a;
+            color: #e0e0e0;
+            padding: 2rem;
+            min-height: 100vh;
+        }
+
+        h1 {
+            color: #00f0ff;
+            margin-bottom: 0.5rem;
+        }
+
+        .subtitle {
+            color: #888;
+            margin-bottom: 2rem;
+            font-size: 0.9rem;
+        }
+
+        .grid {
+            display: grid;
+            gap: 1rem;
+        }
+
+        .card {
+            background: #12132a;
+            border: 1px solid #2a2c4a;
+            border-radius: 12px;
+            padding: 1.2rem;
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            transition: border-color 0.2s;
+        }
+
+        .card:hover {
+            border-color: #00f0ff33;
+        }
+
+        .card.assigned {
+            border-color: #10b981;
+            background: #10b98108;
+        }
+
+        .play-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: #1e1f3a;
+            border: 1px solid #3a3c5a;
+            color: #00f0ff;
+            font-size: 1.2rem;
+            cursor: pointer;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .play-btn:hover {
+            background: #00f0ff15;
+        }
+
+        .play-btn.playing {
+            background: #00f0ff22;
+            color: #fff;
+        }
+
+        .info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .filename {
+            font-size: 0.7rem;
+            color: #666;
+            word-break: break-all;
+            margin-bottom: 0.3rem;
+        }
+
+        .time {
+            font-size: 0.75rem;
+            color: #aaa;
+            font-family: monospace;
+        }
+
+        select {
+            background: #1e1f3a;
+            border: 1px solid #3a3c5a;
+            color: #e0e0e0;
+            padding: 0.5rem 0.8rem;
+            border-radius: 8px;
+            font-size: 0.85rem;
+            min-width: 240px;
+            cursor: pointer;
+        }
+
+        select:focus {
+            border-color: #00f0ff;
+            outline: none;
+        }
+
+        .save-btn {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin: 2rem auto 0;
+            padding: 1rem 2rem;
+            background: linear-gradient(135deg, #00f0ff, #7c3aed);
+            border: none;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 1.1rem;
+            font-weight: 800;
+            cursor: pointer;
+            transition: transform 0.2s;
+        }
+
+        .save-btn:hover {
+            transform: scale(1.02);
+        }
+
+        .save-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .status {
+            text-align: center;
+            margin-top: 1rem;
+            font-size: 0.9rem;
+        }
+
+        .status.success {
+            color: #10b981;
+        }
+
+        .status.error {
+            color: #ef4444;
+        }
+
+        .section-label {
+            font-size: 0.75rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #00f0ff;
+            margin: 1.5rem 0 0.5rem;
+        }
+    </style>
+</head>
+
+<body>
+    <h1>🎙 Voice Cue Assignment Tool</h1>
+    <p class="subtitle">Listen to each MP3, then assign it to the correct cue slot. Click "Save All" to persist them
+        permanently.</p>
+
+    <div class="grid" id="mp3-list"></div>
+
+    <button class="save-btn" id="save-btn" disabled>💾 Save All Assigned Cues to App</button>
+    <div class="status" id="status"></div>
+
+    <script>
+        const CUE_SLOTS = [
+            {
+                group: 'L1–L3: Full Cues — "Eyes [X] Aware [Y]"', slots: [
+                    { id: 'full_eyesBrake_awareApex', label: '"Eyes Braking Marker — Aware Apex"' },
+                    { id: 'full_eyesApex_awareExit', label: '"Eyes Apex — Aware Exit"' },
+                    { id: 'full_eyesExit_awareStraight', label: '"Eyes Exit — Aware Straight"' },
+                    { id: 'full_eyesStraight_awareBrake', label: '"Eyes Straight — Aware Braking Marker"' },
+                ]
+            },
+            {
+                group: 'L4: Awareness Cues — "Aware [Y]"', slots: [
+                    { id: 'aware_apex', label: '"Aware Apex"' },
+                    { id: 'aware_exit', label: '"Aware Exit"' },
+                    { id: 'aware_straight', label: '"Aware Straight"' },
+                    { id: 'aware_brakingMarker', label: '"Aware Braking Marker"' },
+                ]
+            },
+            {
+                group: 'L5: Marker Cues — "[X]" only', slots: [
+                    { id: 'marker_brakingMarker', label: '"Braking Marker"' },
+                    { id: 'marker_apex', label: '"Apex"' },
+                    { id: 'marker_exit', label: '"Exit"' },
+                    { id: 'marker_straight', label: '"Straight"' },
+                ]
+            },
+        ];
+
+        const MP3_FILES = [
+            'ElevenLabs_2026-02-28T08_39_17_Craig _pvc_sp100_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_39_44_Craig _pvc_sp100_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_40_36_Craig _pvc_sp110_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_41_25_Craig _pvc_sp115_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_42_15_Craig _pvc_sp100_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_42_48_Craig _pvc_sp100_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_43_04_Craig _pvc_sp100_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_43_29_Craig _pvc_sp108_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_44_08_Craig _pvc_sp106_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_44_26_Craig _pvc_sp106_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_44_41_Craig _pvc_sp106_s50_sb75_se0_b_m2.mp3',
+            'ElevenLabs_2026-02-28T08_45_05_Craig _pvc_sp102_s50_sb75_se0_b_m2.mp3',
+        ];
+
+        // Build flat slot list for dropdown
+        const allSlots = CUE_SLOTS.flatMap(g => g.slots);
+        let currentAudio = null;
+
+        function buildOptions() {
+            let html = '<option value="">— Select cue slot —</option>';
+            for (const group of CUE_SLOTS) {
+                html += `<optgroup label="${group.group}">`;
+                for (const slot of group.slots) {
+                    html += `<option value="${slot.id}">${slot.label}</option>`;
+                }
+                html += '</optgroup>';
+            }
+            return html;
+        }
+
+        // Render MP3 list
+        const listEl = document.getElementById('mp3-list');
+        const optionsHtml = buildOptions();
+
+        MP3_FILES.forEach((file, i) => {
+            const time = file.match(/T(\d{2}_\d{2}_\d{2})/)?.[1]?.replace(/_/g, ':') || '';
+            const card = document.createElement('div');
+            card.className = 'card';
+            card.id = `card-${i}`;
+            card.innerHTML = `
+            <button class="play-btn" data-idx="${i}" title="Play">▶</button>
+            <div class="info">
+                <div class="filename">${file}</div>
+                <div class="time">Generated at ${time}</div>
+            </div>
+            <select data-idx="${i}">${optionsHtml}</select>
+        `;
+            listEl.appendChild(card);
+        });
+
+        // Play buttons
+        document.querySelectorAll('.play-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const idx = parseInt(btn.dataset.idx);
+                if (currentAudio) { currentAudio.pause(); currentAudio = null; }
+                document.querySelectorAll('.play-btn').forEach(b => { b.textContent = '▶'; b.classList.remove('playing'); });
+
+                const audio = new Audio('audio/' + MP3_FILES[idx]);
+                currentAudio = audio;
+                btn.textContent = '⏸';
+                btn.classList.add('playing');
+                audio.addEventListener('ended', () => { btn.textContent = '▶'; btn.classList.remove('playing'); currentAudio = null; });
+                audio.play();
+            });
+        });
+
+        // Track assignments and enable save
+        document.querySelectorAll('select').forEach(sel => {
+            sel.addEventListener('change', () => {
+                const card = document.getElementById(`card-${sel.dataset.idx}`);
+                card.className = sel.value ? 'card assigned' : 'card';
+                checkSaveReady();
+            });
+        });
+
+        function checkSaveReady() {
+            const assigned = document.querySelectorAll('select');
+            let count = 0;
+            assigned.forEach(s => { if (s.value) count++; });
+            document.getElementById('save-btn').disabled = count === 0;
+            document.getElementById('save-btn').textContent = `💾 Save ${count} Assigned Cue${count !== 1 ? 's' : ''} to App`;
+        }
+
+        // Save to IndexedDB
+        document.getElementById('save-btn').addEventListener('click', async () => {
+            const statusEl = document.getElementById('status');
+            statusEl.textContent = 'Saving...';
+            statusEl.className = 'status';
+
+            try {
+                const db = await openDB();
+                const selects = document.querySelectorAll('select');
+                let saved = 0;
+
+                for (const sel of selects) {
+                    if (!sel.value) continue;
+                    const idx = parseInt(sel.dataset.idx);
+                    const file = MP3_FILES[idx];
+
+                    // Fetch the MP3 file
+                    const response = await fetch('audio/' + file);
+                    const arrayBuffer = await response.arrayBuffer();
+
+                    // Save to IndexedDB
+                    const tx = db.transaction('cues', 'readwrite');
+                    tx.objectStore('cues').put({
+                        id: sel.value,
+                        data: arrayBuffer,
+                        fileName: file,
+                        mimeType: 'audio/mpeg',
+                        size: arrayBuffer.byteLength,
+                        savedAt: new Date().toISOString()
+                    });
+                    await new Promise((res, rej) => { tx.oncomplete = res; tx.onerror = rej; });
+                    saved++;
+                }
+
+                db.close();
+                statusEl.textContent = `✅ ${saved} voice cue${saved !== 1 ? 's' : ''} saved! Open the main app — they'll load automatically.`;
+                statusEl.className = 'status success';
+            } catch (err) {
+                statusEl.textContent = `❌ Error: ${err.message}`;
+                statusEl.className = 'status error';
+                console.error(err);
+            }
+        });
+
+        function openDB() {
+            return new Promise((resolve, reject) => {
+                const req = indexedDB.open('LapBlueprintVoiceCues', 1);
+                req.onupgradeneeded = (e) => {
+                    const db = e.target.result;
+                    if (!db.objectStoreNames.contains('cues')) {
+                        db.createObjectStore('cues', { keyPath: 'id' });
+                    }
+                };
+                req.onsuccess = () => resolve(req.result);
+                req.onerror = () => reject(req.error);
+            });
+        }
+    </script>
+</body>
+
+</html>

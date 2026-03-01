@@ -1,0 +1,265 @@
+{
+  "trackName": "Ruapuna Park (Mike Pero Motorsport Park)",
+  "country": "New Zealand",
+  "length": "3.03km (full circuit)",
+  "direction": "clockwise",
+  "totalCorners": 8,
+  "surfaceNotes": "Mixed surface quality. Ripple strips (rough concrete) on exits of T1, T3, T5. Concrete pads at T1 exit and pit area. Greasy ripple strips in wet conditions. Dip on entry to T2. Bump near T2 apex.",
+  "elevationProfile": "Generally flat — Canterbury Plains. Minor undulations. Notable dip on approach to Turn 2.",
+  "corners": [
+    {
+      "number": 1,
+      "name": "Turn 1",
+      "direction": "right",
+      "type": "medium",
+      "severity": "medium",
+      "gazeTargets": {
+        "brakingReference": "200m board approaching on left side of main straight. Then the 100m board on the left — this is where eyes commit to the braking zone.",
+        "turnInReference": "Right-hand edge of track — use full width of right side. The white line on the right provides the turn-in visual anchor.",
+        "apexFixation": "Inside red-white kerb at the tightest point. Close to kerb but avoid mounting it — the kerb edge itself is the fixation point.",
+        "exitTarget": "Rough ripple strip on right side of exit. Straddle the ripple strip — two wheels outside on the smooth concrete pad beyond it.",
+        "peripheralCues": "Concrete pad visible on exit outside. Tyre wall barrier on outside through corner. Main straight receding in peripheral behind."
+      },
+      "kerbDescription": {
+        "inside": "Red-white striped kerb at apex. Avoid using too much — unbalances car on acceleration.",
+        "outside": "Rough ripple strip on exit (right side). Smooth concrete pad beyond the ripple strip.",
+        "notes": "CAUTION: Ripple strip gets greasy in wet conditions. The concrete pad outside is safe to straddle."
+      },
+      "elevation": "flat",
+      "camber": "positive",
+      "approach": "Long main straight — high speed approach. 200m and 100m boards on left provide braking references.",
+      "exitTo": "Short kinked straight to Turn 2 — straight is not truly straight, has a slight kink.",
+      "isPartOfComplex": false,
+      "complexWith": [],
+      "visualChallenge": "Long straight means high closing speed. Eyes must commit early to the 200m board, then transfer to 100m board, then to apex kerb — three saccades in quick succession at high speed.",
+      "danVanNotes": "High-speed entry from main straight can trigger VAN if braking commitment is late. Lock eyes onto 200m board early to anchor DAN. The kerb is a strong visual target — let it pull the gaze."
+    },
+    {
+      "number": 2,
+      "name": "Turn 2",
+      "direction": "right",
+      "type": "sweeper",
+      "severity": "fast",
+      "gazeTargets": {
+        "brakingReference": "Short braking zone — the kinked straight from T1 narrows the visual field. The outside edge of track where it begins to curve right is the braking anchor.",
+        "turnInReference": "Do not turn in too early — the turn-in point is later than it appears. Look for where the inside kerb begins on the right.",
+        "apexFixation": "Large apex kerb — the visual target is RIGHT BESIDE the kerb but NOT on it. The kerb edge is the fixation line. Bump visible near apex — peripheral awareness of surface change.",
+        "exitTarget": "Right-hand side kerbing on exit. Full throttle zone — eyes snap to the exit kerbing and track-out point toward Turn 3.",
+        "peripheralCues": "Tyre wall on outside. Large gravel trap visible on outside. Club track junction visible (grey area) — ignore it, peripheral only. Dip on entry creates a visual pitch change."
+      },
+      "kerbDescription": {
+        "inside": "Large red-white apex kerb — do NOT mount it, it's quite large. Stay right beside it.",
+        "outside": "Red-white exit kerbing on right — use this on exit.",
+        "notes": "Quickest corner on the circuit. Apex kerb is large and will unbalance the car if mounted."
+      },
+      "elevation": "dip",
+      "camber": "positive",
+      "approach": "Short kinked straight from Turn 1 — car needs to be eased to middle then re-committed to outside. The straight is NOT truly straight.",
+      "exitTo": "Full throttle run to Turn 3 (Hairpin) — heading towards the right side of circuit.",
+      "isPartOfComplex": false,
+      "complexWith": [],
+      "visualChallenge": "Dip on entry disrupts visual horizon momentarily. The kinked straight means gaze must re-anchor after T1 exit. Bump near apex can pull attention down — keep eyes on kerb edge, not surface.",
+      "danVanNotes": "Fastest corner on circuit — VAN risk if eyes drop to surface at the dip or bump. The large kerb is a powerful DAN anchor — commit gaze to its edge early. Trust peripheral vision for the bump."
+    },
+    {
+      "number": 3,
+      "name": "Hairpin (Turn 3)",
+      "direction": "right",
+      "type": "hairpin",
+      "severity": "very_tight",
+      "gazeTargets": {
+        "brakingReference": "Full throttle approach from T2. The visual cue is the track narrowing as it bends sharply right. Brake marker boards if present, otherwise the point where the hairpin geometry becomes visible ahead.",
+        "turnInReference": "Keep car straight heading towards right side of circuit. The turn-in is where eyes shift from the braking zone to the inside of the hairpin — the inside kerb appearing in peripheral vision.",
+        "apexFixation": "Apex is ⅔ of the way around the hairpin. Important to be CLOSE to the kerb but no advantage in touching it. The kerb edge at the ⅔ point is the QE fixation target.",
+        "exitTarget": "Track opening up on right side beyond the hairpin. Do NOT let eyes drop to the right-side ripple strip — look past it to where the track straightens toward T4.",
+        "peripheralCues": "Club track junction visible on inside of hairpin (grey area). Large gravel trap on outside. Tyre wall barriers on outside. Right-side ripple strip on exit — peripheral only, do not fixate."
+      },
+      "kerbDescription": {
+        "inside": "Red-white kerb through hairpin. Be close but do not touch — no advantage in mounting it.",
+        "outside": "Ripple strip on right side of exit. Difficult to avoid if entered too fast or applied power too early.",
+        "notes": "Slowest corner on the circuit. 'Slow in, fast out will pay dividends.' The ⅔ apex means a late apex — eyes must wait for it."
+      },
+      "elevation": "flat",
+      "camber": "positive",
+      "approach": "Full throttle from Turn 2 — long braking zone into slowest corner on circuit.",
+      "exitTo": "Short straight with slight S-bends heading into Turn 4 (the complex).",
+      "isPartOfComplex": false,
+      "complexWith": [],
+      "visualChallenge": "Late apex (⅔ around) means the eyes must resist locking onto the early part of the kerb. The hairpin geometry pulls the gaze inward too early — WAIT for the ⅔ point. Exit ripple strip is a VAN trap if you look at it.",
+      "danVanNotes": "Biggest VAN risk: eyes dropping to right-side ripple strip on exit — this is target fixation toward the hazard. DAN fix: lock exit gaze PAST the ripple strip to where the track opens. The ⅔ late apex requires patience — if gaze commits too early, DAN breaks and VAN uncertainty creeps in."
+    },
+    {
+      "number": 4,
+      "name": "Turn 4 (The Complex Entry)",
+      "direction": "left",
+      "type": "medium",
+      "severity": "medium",
+      "gazeTargets": {
+        "brakingReference": "Enter on the left-hand side. White line on the left of the circuit is the braking anchor. Brake hard ON the white line.",
+        "turnInReference": "Late turn-in point — deeper than you think. Let the car go into the corner further before committing the turn. The inside (left) kerb appearing is the turn-in trigger.",
+        "apexFixation": "Apex is ⅔ of the way around. Large kerbing marks the apex — do NOT want to hit it, but it's the visual reference. Eyes fixate on the kerb edge at the ⅔ point.",
+        "exitTarget": "Middle of track — eyes must immediately find the NEXT apex (Turn 5, right-hander). Exit gaze transitions straight to T5 entry reference.",
+        "peripheralCues": "The S-bend approach creates a visual rhythm. Gravel trap on outside. The next right-hand curve (T5) visible in peripheral as you approach the apex."
+      },
+      "kerbDescription": {
+        "inside": "Large red-white kerbing at apex. Avoid hitting it but use as visual reference.",
+        "outside": "Exit kerb — let car run out to it. Preferred to keep car tight on exit.",
+        "notes": "Part of 'the complex' — speed through this section matters. Late turn-in is critical."
+      },
+      "elevation": "flat",
+      "camber": "positive",
+      "approach": "Relatively easy straight line through slight S-bends from Hairpin. Speed through the complex affects everything after it.",
+      "exitTo": "Immediately into Turn 5 (right-hander) — need to balance car and carry maximum speed through.",
+      "isPartOfComplex": true,
+      "complexWith": [5],
+      "visualChallenge": "The S-bend approach makes the visual line non-obvious. Late turn-in means eyes must hold on the braking reference (white line) longer than instinct says. Exit gaze must immediately find T5 — no resting point between corners.",
+      "danVanNotes": "Speed through the complex is critical — if eyes are uncertain here, VAN fires and scrubs speed for the entire complex section. Commit to the white line braking reference early. The late turn-in requires DAN discipline — eyes must WAIT for the deeper entry point."
+    },
+    {
+      "number": 5,
+      "name": "Turn 5 (In-field Sweeper)",
+      "direction": "right",
+      "type": "sweeper",
+      "severity": "medium",
+      "gazeTargets": {
+        "brakingReference": "Let car run from Turn 4 exit nice and wide — then brake hard in a straight line up to mid-track. The point where you need to be facing the direction you want to go is the braking anchor.",
+        "turnInReference": "Turn the car so you are effectively facing the direction you want to go. The inside kerb line appearing on the right is the turn-in visual cue.",
+        "apexFixation": "Apex is ⅔ of the way around the sweeper. Smooth throttle here — the kerb edge at ⅔ point is the fixation target. Do NOT run over the apex kerbing — it upsets the car's balance.",
+        "exitTarget": "Watch for the large ripple section on the outside of the corner. Eyes must look PAST the ripple strip to where the track straightens toward Turn 6.",
+        "peripheralCues": "Large ripple strip section on outside is a strong peripheral cue for track limits. There is an opportunity to run slightly wide after the ripple strip if necessary — the exit is almost at the end of this ripple strip."
+      },
+      "kerbDescription": {
+        "inside": "Red-white apex kerb. Running over it will upset the car's balance — stay beside it.",
+        "outside": "Large ripple strip section on outside of exit. Can run slightly wide after it ends.",
+        "notes": "Very challenging to master. 'Few discrepancies in the ideal line' — the line through here is debated."
+      },
+      "elevation": "flat",
+      "camber": "mixed",
+      "approach": "Direct from Turn 4 exit — let car run wide from previous corner before braking.",
+      "exitTo": "Run toward Turn 6 — use every bit of track on left-hand side as approach.",
+      "isPartOfComplex": true,
+      "complexWith": [4],
+      "visualChallenge": "The most challenging corner to master. The ideal line is debated, which means the visual anchors are less obvious. The ripple strip on exit is a strong VAN attractor. Need to trust the ⅔ apex commitment even though the line feels uncertain.",
+      "danVanNotes": "Highest VAN risk on the circuit — 'very challenging to master' means the brain hasn't decided where to look, which is exactly when VAN takes over. Fix: pre-commit to the ⅔ apex kerb as the sole fixation target. If the eyes are calm at that one point, the rest of the sweeper follows. The ripple strip exit is the secondary VAN trap — eyes must look THROUGH it."
+    },
+    {
+      "number": 6,
+      "name": "Turn 6",
+      "direction": "right",
+      "type": "medium",
+      "severity": "medium",
+      "gazeTargets": {
+        "brakingReference": "Use every bit of track on left-hand side approaching. Small concrete kerbing on left provides extra width — sneak onto it. Short brake — common problem is braking too late. The turn-in comes slightly EARLIER than expected.",
+        "turnInReference": "Get car into the turn slightly earlier than you would think. The inside kerb on the right appearing is the turn-in cue — but it comes sooner than instinct suggests.",
+        "apexFixation": "On the power heading toward apex. It's possible to USE the kerbing here — the apex kerb can be clipped. This is the fixation point: the kerb edge where you can clip it.",
+        "exitTarget": "Let car drift to left-hand side while still on power. DO NOT look at the exit kerbing — running over it tends to suck the car off track and into the dirt. Eyes look PAST it to the straight toward Cochrane.",
+        "peripheralCues": "Concrete kerbing on left at entry gives extra space. Exit kerbing on left is a danger zone — peripheral only. The straight toward Cochrane visible ahead."
+      },
+      "kerbDescription": {
+        "inside": "Apex kerb can be clipped — usable as a reference point.",
+        "outside": "EXIT DANGER: Kerbing at exit tends to suck car off track into dirt. Avoid running over it.",
+        "notes": "Common problem is braking too late and entering too fast. Turn in earlier than you think."
+      },
+      "elevation": "flat",
+      "camber": "positive",
+      "approach": "From Turn 5 exit — use full width of left side, including small concrete kerbing for extra room.",
+      "exitTo": "Short straight into Cochrane (Turn 6b) — no time to get fully to right-hand side.",
+      "isPartOfComplex": true,
+      "complexWith": [7],
+      "visualChallenge": "The earlier-than-expected turn-in means eyes must commit to the apex sooner than instinct allows. The exit kerbing is a VAN trap — it sucks the car off track, so the gaze must actively avoid it.",
+      "danVanNotes": "Counter-intuitive timing — turn in earlier than you think. DAN must override the instinct to wait. The exit kerb is the primary VAN hazard: if eyes drop to it, the car follows. Keep exit gaze on the straight ahead, not the kerb edge."
+    },
+    {
+      "number": 7,
+      "name": "Cochrane",
+      "direction": "right",
+      "type": "medium",
+      "severity": "tight",
+      "gazeTargets": {
+        "brakingReference": "Nice straight line brake from T6 exit. No time to get car to right-hand side — ½ track width is adequate for entry positioning. The braking reference is the point where Cochrane's curve becomes visible.",
+        "turnInReference": "Turn the car AS you come off the brakes — the transition from braking to turning is simultaneous. Get on the throttle by the apex.",
+        "apexFixation": "Apex kerb can be clipped — use it more as a REFERENCE POINT to know you are at the apex. The kerb edge is the QE fixation point.",
+        "exitTarget": "Full throttle at exit. Taking advantage of the kerbing — run the car ALONG the exit kerbing, then smoothly back onto the track heading for Turn 7.",
+        "peripheralCues": "T6 exit still in peripheral behind. The exit kerbing line provides a guiding visual rail toward Turn 7. Pit entry visible on left."
+      },
+      "kerbDescription": {
+        "inside": "Apex kerb — clippable, serves as reference point to confirm apex position.",
+        "outside": "Exit kerbing — take full advantage, run along it before transitioning back to track.",
+        "notes": "Very quick transition from T6. 'No time' to fully position — commit to ½ track entry width."
+      },
+      "elevation": "flat",
+      "camber": "positive",
+      "approach": "Immediate from Turn 6 exit — straight line brake but only ½ track positioning available.",
+      "exitTo": "Full throttle along exit kerbing toward Turn 7 (final corner before main straight).",
+      "isPartOfComplex": true,
+      "complexWith": [6],
+      "visualChallenge": "Rapid transition from T6 — eyes must re-anchor very quickly from T6 exit gaze to Cochrane braking reference. The simultaneous brake-to-turn transition means gaze must already be committed to the apex before the car has finished braking.",
+      "danVanNotes": "Speed of transition from T6 is the VAN risk — if eyes haven't found the new anchor by the time braking starts, VAN fires. Pre-load the Cochrane apex in peripheral vision while still completing T6 exit. The apex kerb as a 'reference point to know you are there' is perfect QE language — it's a settling point, not an action point."
+    },
+    {
+      "number": 8,
+      "name": "Turn 7 (Final Sweeper)",
+      "direction": "left",
+      "type": "sweeper",
+      "severity": "medium",
+      "gazeTargets": {
+        "brakingReference": "Approach ⅔ to the right-hand side of entry. Not necessary to follow the white line. Quite a deep braking zone — the brake point is where the sweeper geometry becomes visible.",
+        "turnInReference": "Turn the car smoothly. The tendency is to accelerate too quickly — the turn-in must be smooth and progressive. Inside (left) kerb appearing is the turn-in cue.",
+        "apexFixation": "Apex is ⅔ of the way around the sweeper. Full throttle looking for the apex — the red-white kerb at the ⅔ point is the QE fixation target.",
+        "exitTarget": "Use FULL WIDTH of road at exit. Let car run smoothly up to the white line on the right-hand side. The white line on the right is the exit gaze target — eyes must find it early to maximise straight-line speed.",
+        "peripheralCues": "CONCRETE WALL on outside if out too wide — apexed early = in trouble. No run-off at this corner. Pit entry on left visible. Main straight opening up ahead is the long-range visual anchor."
+      },
+      "kerbDescription": {
+        "inside": "Red-white apex kerb at the ⅔ point.",
+        "outside": "Concrete wall — NO run-off. White line on right at exit provides track limit reference.",
+        "notes": "CRITICAL CORNER: No run-off, concrete wall on outside. 'Keep your eyes up.' Gear change points after corner indicate exit quality."
+      },
+      "elevation": "flat",
+      "camber": "positive",
+      "approach": "From Cochrane exit — full throttle along exit kerbing, then deep braking into sweeper.",
+      "exitTo": "Main straight — front straight. Quality of exit directly determines straight-line speed. 'Very important corner.'",
+      "isPartOfComplex": false,
+      "complexWith": [],
+      "visualChallenge": "Concrete wall on outside with no run-off — the biggest consequence corner on the circuit. If apexed too early, the wall is the consequence. Eyes must stay UP and committed to the ⅔ apex, not dropping to the wall. The guide literally says 'keep your eyes up.'",
+      "danVanNotes": "HIGHEST CONSEQUENCE CORNER. The concrete wall is the ultimate VAN trigger — if eyes even glance at it, target fixation takes over. DAN must be absolute here. The ⅔ late apex is the single settling point. 'Keep your eyes up' is pure QE instruction — eyes on the apex kerb, aware of the exit white line in peripheral. The wall exists only in peripheral. This corner determines lap time — the exit speed sets the entire main straight speed."
+    }
+  ],
+  "notableVisualFeatures": [
+    "200m and 100m braking boards on main straight approach to Turn 1 — primary distance reference for the entire lap",
+    "Red-white striped kerbs at every apex — consistent visual language throughout the circuit, all kerbs are the same style",
+    "Ripple strips (rough concrete) on exits of T1, T3, T5 — these are VAN traps if fixated upon. Use as peripheral track-limit references only",
+    "Club Track junction visible at T2/T3 area (grey shaded) — ignore as visual noise, peripheral only",
+    "Concrete pad beyond T1 exit ripple strip — safe run-off surface, can straddle",
+    "White line on left side of circuit usable as braking reference at T4",
+    "Small concrete kerbing on left at T6 entry provides extra track width",
+    "Pit entry visible on left between Cochrane and Turn 7",
+    "Concrete wall on outside of Turn 7 — NO run-off. Most consequential visual landmark on the circuit",
+    "Tyre wall barriers on outside of T1, T2, T3 provide peripheral depth cues",
+    "The circuit has a ⅔ apex pattern — Turns 3, 4, 5, 7 all have late apexes at approximately ⅔ through the corner"
+  ],
+  "problemCornersForQuietEye": [
+    {
+      "cornerNumber": 5,
+      "issue": "Most challenging corner to master — the ideal line is debated, meaning there's no single obvious visual anchor. Uncertainty breaks QE.",
+      "remedy": "Pre-commit to the ⅔ apex kerb as the SOLE fixation target. Accept that the line may vary but the gaze anchor doesn't. If the eyes are calm at that one point, the body finds the line. Train this corner 3x in weak corner reps."
+    },
+    {
+      "cornerNumber": 8,
+      "issue": "Concrete wall on outside with no run-off. Highest consequence = highest VAN activation. The guide explicitly says 'keep your eyes up' — acknowledging the natural tendency to drop gaze toward the hazard.",
+      "remedy": "This is the single most important QE corner on the circuit. The ⅔ apex kerb is the settling point. The wall does NOT exist in foveal vision — it is peripheral only. Train the exit gaze to snap to the right-hand white line, not to check the wall distance. 'Eyes up' must become automatic."
+    },
+    {
+      "cornerNumber": 3,
+      "issue": "Hairpin with late ⅔ apex — eyes naturally want to fixate on the early part of the kerb because the hairpin is so tight. Exit ripple strip is a secondary VAN trap.",
+      "remedy": "Train the gaze to WAIT for the ⅔ point. Count the kerb — the fixation point is late. For exit, pre-load the track-straightening point beyond the ripple strip as the PFTS target. The ripple strip is peripheral only."
+    },
+    {
+      "cornerNumber": 6,
+      "issue": "Counter-intuitive turn-in timing (earlier than expected) conflicts with natural gaze rhythm. Exit kerbing sucks car off track — a strong VAN attractor.",
+      "remedy": "Override instinct with trained timing — the eyes must commit to the apex earlier than feels natural. Practice the earlier commitment in Laps 1-2 pause mode. For exit, gaze must actively skip past the kerbing to the straight toward Cochrane."
+    }
+  ],
+  "_source": "2K Cup TrackTime Manual — Ruapuna Park (PDF track guide with corner-by-corner diagrams)",
+  "_cachedAt": 1740787200000,
+  "_manualEntry": true
+}
