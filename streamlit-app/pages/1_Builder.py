@@ -347,10 +347,12 @@ if st.session_state.get('track_model') and not st.session_state.get('blueprint')
         meta = st.session_state['video_meta']
         duration = meta['duration']
 
+        st.video(uploaded)
         st.caption(f"Duration: {meta['duration']:.1f}s | FPS: {meta['fps']:.0f} | "
                    f"Resolution: {meta['width']}x{meta['height']}")
 
         # ── Interactive Trim Controls ─────────────────────────
+        st.markdown("---")
         st.markdown("#### Trim to Single Lap")
 
         import cv2
