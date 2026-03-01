@@ -23,7 +23,7 @@ RUAPUNA_BLUEPRINT = {
     'sections': [
         {
             'number': 1,
-            'name': 'Turn 1 – Castrol Corner (Left Kink)',
+            'name': 'Turn 1 – Pit Straight End (Left Kink)',
             'direction': 'left',
             'type': 'kink',
             'severity': 'fast',
