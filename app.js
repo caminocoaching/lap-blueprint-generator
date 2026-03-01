@@ -74,6 +74,7 @@ const App = {
     init() {
         AIEngine.init();
         AIEngine.preseedTrackData(); // Load bundled track data (Ruapuna, etc.)
+        if (typeof BlueprintTemplates !== 'undefined') BlueprintTemplates.init();
         this.loadBlueprints();
         this.setupNav();
         this.setupSettings();

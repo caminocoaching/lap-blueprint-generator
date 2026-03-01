@@ -984,6 +984,13 @@ Generate the full Quiet Eye conditioning blueprint. Make every gaze instruction 
     // ============================================================
 
     async generateBlueprint(trackConfig, onProgress) {
+        // PIPELINE MODE — 4-step deterministic pipeline (preferred)
+        if (typeof BlueprintPipeline !== 'undefined' && BlueprintPipeline.isConfigured()) {
+            if (onProgress) onProgress(1, 'Using 4-step QE pipeline...');
+            return BlueprintPipeline.generateBlueprint(trackConfig, onProgress);
+        }
+
+        // LEGACY MODE — single-prompt fallback
         const provider = this.blueprintProvider;
 
         if (provider === 'claude' && this.claudeApiKey) {
@@ -991,18 +998,52 @@ Generate the full Quiet Eye conditioning blueprint. Make every gaze instruction 
         } else if (provider === 'gemini' && this.geminiApiKey) {
             return this._generateViaGemini(trackConfig, onProgress);
         } else if (this.claudeApiKey) {
-            // Fallback: try Claude if available
             return this._generateViaClaude(trackConfig, onProgress);
         } else if (this.geminiApiKey) {
-            // Fallback: try Gemini if available
             return this._generateViaGemini(trackConfig, onProgress);
         } else {
-            // No API keys — use demo mode
             if (onProgress) onProgress(50, 'No API keys configured — using demo blueprint...');
             const blueprint = this.generateDemoBlueprint(trackConfig);
             if (onProgress) onProgress(100, 'Demo blueprint generated');
             return blueprint;
         }
+    },
+
+    /**
+     * Focused Claude API call for pipeline steps.
+     * Temperature 0 for deterministic output. Lower max_tokens for focused responses.
+     */
+    async _callClaudePipeline(prompt) {
+        if (!this.claudeApiKey) throw new Error('Claude API key required for pipeline mode.');
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'x-api-key': this.claudeApiKey,
+                'anthropic-version': '2023-06-01',
+                'anthropic-dangerous-direct-browser-access': 'true'
+            },
+            body: JSON.stringify({
+                model: this.claudeModel || 'claude-sonnet-4-5-20250929',
+                max_tokens: 2048,
+                temperature: 0,
+                messages: [{
+                    role: 'user',
+                    content: prompt
+                }]
+            })
+        });
+
+        if (!response.ok) {
+            const err = await response.json().catch(() => ({}));
+            throw new Error(err.error?.message || `Claude Pipeline Error: ${response.status}`);
+        }
+
+        const data = await response.json();
+        const rawText = data.content?.[0]?.text;
+        if (!rawText) throw new Error('Empty response from Claude pipeline step.');
+        return rawText;
     },
 
 
