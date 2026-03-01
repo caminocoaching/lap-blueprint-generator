@@ -5,3 +5,4 @@ data/blueprints/*.json
 *.mp4
 *.tmp
 .env
+.keys.json

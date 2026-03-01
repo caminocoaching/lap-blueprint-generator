@@ -3,6 +3,38 @@ Lap Blueprint Generator — Quiet Eye Conditioning System
 Streamlit Edition
 """
 import streamlit as st
+import json
+import os
+
+# ── Persistent API Key Storage ───────────────────────────
+# Keys saved to a local .keys.json file so they survive browser refresh
+_KEYS_FILE = os.path.join(os.path.dirname(os.path.abspath(__file__)), '.keys.json')
+
+def _load_saved_keys():
+    """Load API keys from local file."""
+    if os.path.exists(_KEYS_FILE):
+        try:
+            with open(_KEYS_FILE, 'r') as f:
+                return json.load(f)
+        except (json.JSONDecodeError, IOError):
+            pass
+    return {}
+
+def _save_keys(keys_dict):
+    """Save API keys to local file."""
+    try:
+        with open(_KEYS_FILE, 'w') as f:
+            json.dump(keys_dict, f)
+    except IOError:
+        pass
+
+# Load saved keys into session state on first run
+if 'keys_loaded' not in st.session_state:
+    saved = _load_saved_keys()
+    for k, v in saved.items():
+        if v and k not in st.session_state:
+            st.session_state[k] = v
+    st.session_state['keys_loaded'] = True
 
 st.set_page_config(
     page_title="Lap Blueprint — Quiet Eye",
@@ -94,13 +126,20 @@ with st.sidebar:
             help="For track map analysis. Get yours at platform.openai.com"
         )
 
-        # Auto-save to session state
+        # Auto-save to session state AND persist to local file
         if gemini_key:
             st.session_state['gemini_key'] = gemini_key
         if claude_key:
             st.session_state['claude_key'] = claude_key
         if openai_key:
             st.session_state['openai_key'] = openai_key
+
+        # Persist keys to disk so they survive refresh
+        _save_keys({
+            'gemini_key': gemini_key,
+            'claude_key': claude_key,
+            'openai_key': openai_key,
+        })
 
         # Status indicators
         cols = st.columns(3)
