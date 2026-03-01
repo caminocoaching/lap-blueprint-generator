@@ -2,12 +2,47 @@
 API Engine — Wraps Gemini, Claude, and OpenAI for the Lap Blueprint Generator.
 """
 import json
+import re
 import time
 import base64
 import requests
 import google.generativeai as genai
 from anthropic import Anthropic
 from openai import OpenAI
+
+
+def _repair_json(text):
+    """Attempt to repair common JSON issues from LLM outputs."""
+    text = text.strip()
+    # Strip markdown code blocks
+    if text.startswith('```'):
+        lines = text.split('\n')
+        text = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+
+    # Fix trailing commas before } or ]
+    text = re.sub(r',\s*([}\]])', r'\1', text)
+
+    # Fix unterminated strings — truncate at last valid JSON structure
+    try:
+        return json.loads(text)
+    except json.JSONDecodeError:
+        pass
+
+    # Try truncating to last complete object/array
+    for end_char in ['}', ']']:
+        last_idx = text.rfind(end_char)
+        if last_idx > 0:
+            candidate = text[:last_idx + 1]
+            # Balance braces
+            open_b = candidate.count('{') - candidate.count('}')
+            open_a = candidate.count('[') - candidate.count(']')
+            candidate += '}' * max(0, open_b) + ']' * max(0, open_a)
+            try:
+                return json.loads(candidate)
+            except json.JSONDecodeError:
+                continue
+
+    raise json.JSONDecodeError("Could not repair JSON", text, 0)
 
 
 class APIEngine:
@@ -314,7 +349,10 @@ Return JSON:
                 )
             )
 
-            result = json.loads(response.text)
+            try:
+                result = json.loads(response.text)
+            except json.JSONDecodeError:
+                result = _repair_json(response.text)
             if progress_cb:
                 corners = result.get('corners', [])
                 progress_cb(65, f"Forward pass: found {len(corners)} corners")
@@ -445,7 +483,10 @@ Return JSON:
                 )
             )
 
-            result = json.loads(response.text)
+            try:
+                result = json.loads(response.text)
+            except json.JSONDecodeError:
+                result = _repair_json(response.text)
             if progress_cb:
                 corners = result.get('corners', [])
                 valid = sum(1 for c in corners if c.get('gazeChainValid', False))
@@ -534,27 +575,41 @@ Return JSON:
   "sourceNotes": "<what sources or knowledge this is based on>"
 }}"""
 
-        try:
-            response = model.generate_content(
-                prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.3,
-                    max_output_tokens=8192,
-                    response_mime_type="application/json",
+        for attempt in range(2):
+            try:
+                response = model.generate_content(
+                    prompt,
+                    generation_config=genai.GenerationConfig(
+                        temperature=0.3,
+                        max_output_tokens=8192,
+                        response_mime_type="application/json",
+                    )
                 )
-            )
 
-            result = json.loads(response.text)
-            if progress_cb:
-                corners = result.get('corners', [])
-                confidence = result.get('researchConfidence', 'unknown')
-                progress_cb(50, f"Found {len(corners)} corners (confidence: {confidence})")
-            return result
+                # Try standard parse first, fall back to repair
+                try:
+                    result = json.loads(response.text)
+                except json.JSONDecodeError:
+                    result = _repair_json(response.text)
 
-        except Exception as e:
-            if progress_cb:
-                progress_cb(50, f"Research error: {e}")
-            raise
+                if progress_cb:
+                    corners = result.get('corners', [])
+                    confidence = result.get('researchConfidence', 'unknown')
+                    progress_cb(50, f"Found {len(corners)} corners (confidence: {confidence})")
+                return result
+
+            except json.JSONDecodeError as e:
+                if attempt == 0:
+                    if progress_cb:
+                        progress_cb(30, f"Retrying research (JSON parse issue)...")
+                    continue
+                if progress_cb:
+                    progress_cb(50, f"Research JSON error: {e}")
+                raise
+            except Exception as e:
+                if progress_cb:
+                    progress_cb(50, f"Research error: {e}")
+                raise
 
     # ── Claude: Blueprint Pipeline ───────────────────────────
 
