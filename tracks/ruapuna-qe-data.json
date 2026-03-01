@@ -9,10 +9,10 @@
   "corners": [
     {
       "number": 1,
-      "name": "Turn 1",
-      "direction": "right",
-      "type": "medium",
-      "severity": "medium",
+      "name": "Turn 1 (Castrol Corner)",
+      "direction": "left",
+      "type": "kink",
+      "severity": "fast",
       "gazeTargets": {
         "brakingReference": "200m board approaching on left side of main straight. Then the 100m board on the left — this is where eyes commit to the braking zone.",
         "turnInReference": "Right-hand edge of track — use full width of right side. The white line on the right provides the turn-in visual anchor.",

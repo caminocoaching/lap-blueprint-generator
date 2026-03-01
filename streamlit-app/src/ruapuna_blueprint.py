@@ -23,28 +23,28 @@ RUAPUNA_BLUEPRINT = {
     'sections': [
         {
             'number': 1,
-            'name': 'Turn 1 – Left Sweeper',
+            'name': 'Turn 1 – Castrol Corner (Left Kink)',
             'direction': 'left',
-            'type': 'sweeper',
-            'severity': 'medium',
+            'type': 'kink',
+            'severity': 'fast',
             'isWeak': False,
             'cues': [
                 {
                     'pause': 1,
                     'label': 'Eyes Braking Marker — Aware Apex',
-                    'eyes': '100m board on right',
-                    'aware': 'Left inside kerb paint starting'
+                    'eyes': 'Lift point reference on right',
+                    'aware': 'Left kink kerb approaching'
                 },
                 {
                     'pause': 2,
                     'label': 'Eyes Apex — Aware Exit',
-                    'eyes': 'Red/white left inside kerb',
-                    'aware': 'Track opening left'
+                    'eyes': 'Left inside kerb at kink',
+                    'aware': 'Track straightening ahead'
                 },
                 {
                     'pause': 3,
                     'label': 'Eyes Exit — Aware Straight',
-                    'eyes': 'Left exit kerb end point',
+                    'eyes': 'Kink exit, track opening',
                     'aware': 'Straight ahead, pit wall'
                 },
                 {

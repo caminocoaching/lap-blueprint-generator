@@ -277,6 +277,55 @@ class VideoProcessor:
         return frames
 
     @staticmethod
+    def trim_video(video_path, start_sec, end_sec, output_path=None):
+        """
+        Trim a video file to the specified time range using FFmpeg.
+        Produces a web-ready MP4 (H.264 + AAC, faststart).
+
+        Args:
+            video_path (str): Path to source video file.
+            start_sec (float): Start time in seconds.
+            end_sec (float): End time in seconds.
+            output_path (str): Optional output path. If None, creates a temp file.
+
+        Returns:
+            str: Path to the trimmed video file.
+
+        Raises:
+            RuntimeError: If FFmpeg fails.
+        """
+        import subprocess
+
+        if output_path is None:
+            suffix = Path(video_path).suffix or '.mp4'
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
+            output_path = tmp.name
+            tmp.close()
+
+        duration = end_sec - start_sec
+
+        cmd = [
+            'ffmpeg', '-y',
+            '-ss', str(start_sec),
+            '-i', video_path,
+            '-t', str(duration),
+            '-c:v', 'libx264',
+            '-preset', 'fast',
+            '-crf', '23',
+            '-c:a', 'aac',
+            '-b:a', '128k',
+            '-pix_fmt', 'yuv420p',
+            '-movflags', '+faststart',
+            output_path
+        ]
+
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=300)
+        if result.returncode != 0:
+            raise RuntimeError(f"FFmpeg trim failed: {result.stderr[-500:]}")
+
+        return output_path
+
+    @staticmethod
     def cleanup_temp_file(file_path):
         """
         Delete a temporary video file.

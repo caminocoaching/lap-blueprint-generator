@@ -42,6 +42,31 @@ api = APIEngine(
 )
 
 
+# ── Helper: Extract marker time/target from AI detection results ──
+def _extract_time(markers, *phase_keys):
+    """Extract timestamp from markers dict, trying multiple phase keys."""
+    if not isinstance(markers, dict):
+        return None
+    for key in phase_keys:
+        m = markers.get(key, {})
+        if isinstance(m, dict) and m.get('time') is not None:
+            try:
+                return float(m['time'])
+            except (ValueError, TypeError):
+                pass
+    return None
+
+def _extract_target(markers, *phase_keys):
+    """Extract gaze target string from markers dict."""
+    if not isinstance(markers, dict):
+        return ''
+    for key in phase_keys:
+        m = markers.get(key, {})
+        if isinstance(m, dict) and m.get('gazeTarget'):
+            return str(m['gazeTarget'])
+    return ''
+
+
 # ═══════════════════════════════════════════════════════════
 # STEP 1: DATA COLLECTION — Track name, map, guide
 # ═══════════════════════════════════════════════════════════
@@ -300,7 +325,8 @@ if track_model and track_model.get('corners') and not track_model.get('skipped')
 # STEP 3: UPLOAD & TRIM VIDEO
 # ═══════════════════════════════════════════════════════════
 if st.session_state.get('track_model') and not st.session_state.get('blueprint'):
-    st.markdown("### Step 3 — Upload Onboard Video")
+    st.markdown("### Step 3 — Upload & Trim Onboard Video")
+    st.caption("Upload your full video, then scrub through to find where the lap starts and ends.")
 
     uploaded = st.file_uploader(
         "Drag your onboard video here",
@@ -319,103 +345,594 @@ if st.session_state.get('track_model') and not st.session_state.get('blueprint')
 
         video_path = st.session_state['video_path']
         meta = st.session_state['video_meta']
+        duration = meta['duration']
 
         st.video(uploaded)
         st.caption(f"Duration: {meta['duration']:.1f}s | FPS: {meta['fps']:.0f} | "
                    f"Resolution: {meta['width']}x{meta['height']}")
 
-        # Trim controls
-        st.markdown("**Trim to single lap**")
-        duration = meta['duration']
-        col1, col2 = st.columns(2)
-        with col1:
-            start_time = st.number_input("Lap Start (seconds)", 0.0, duration, 0.0, 0.5)
-        with col2:
-            end_time = st.number_input("Lap End (seconds)", 0.0, duration, min(duration, 120.0), 0.5)
+        # ── Interactive Trim Controls ─────────────────────────
+        st.markdown("---")
+        st.markdown("#### Trim to Single Lap")
+        st.caption("Use the scrubber to find the right frame, then click the button to set it as the start or end of your lap.")
 
-        st.session_state['start_time'] = start_time
-        st.session_state['end_time'] = end_time
-        st.caption(f"Lap duration: {end_time - start_time:.1f}s")
+        # Scrubber slider — browse through the video frame by frame
+        scrub_time = st.slider(
+            "Scrub through video",
+            min_value=0.0,
+            max_value=duration,
+            value=st.session_state.get('scrub_time', 0.0),
+            step=0.1,
+            format="%.1fs",
+            key="scrubber"
+        )
+        st.session_state['scrub_time'] = scrub_time
+
+        # Show frame preview at current scrub position
+        import cv2
+        frame = VideoProcessor.get_frame_at_time(video_path, scrub_time, width=640)
+        if frame is not None:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            st.image(frame_rgb, caption=f"Frame at {scrub_time:.1f}s", use_container_width=True)
+
+        # Set Start / Set End buttons
+        btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 1])
+
+        with btn_col1:
+            if st.button("🟢 Set as LAP START", type="primary", use_container_width=True):
+                st.session_state['start_time'] = scrub_time
+                st.rerun()
+
+        with btn_col2:
+            if st.button("🔴 Set as LAP END", type="primary", use_container_width=True):
+                st.session_state['end_time'] = scrub_time
+                st.rerun()
+
+        with btn_col3:
+            if st.button("↩️ Reset Trim", use_container_width=True):
+                st.session_state['start_time'] = 0.0
+                st.session_state['end_time'] = duration
+                st.rerun()
+
+        # Show current trim points with frame previews
+        start_time = st.session_state.get('start_time', 0.0)
+        end_time = st.session_state.get('end_time', duration)
+
+        # Validate
+        if start_time >= end_time:
+            st.error("Lap start must be before lap end. Adjust your trim points.")
+        else:
+            lap_dur = end_time - start_time
+            st.markdown(f"**Lap: {start_time:.1f}s → {end_time:.1f}s** ({lap_dur:.1f}s)")
+
+            # Show start and end frame previews side by side
+            prev_col1, prev_col2 = st.columns(2)
+
+            with prev_col1:
+                start_frame = VideoProcessor.get_frame_at_time(video_path, start_time, width=320)
+                if start_frame is not None:
+                    start_rgb = cv2.cvtColor(start_frame, cv2.COLOR_BGR2RGB)
+                    st.image(start_rgb, caption=f"🟢 Lap Start: {start_time:.1f}s", use_container_width=True)
+
+            with prev_col2:
+                end_frame = VideoProcessor.get_frame_at_time(video_path, end_time, width=320)
+                if end_frame is not None:
+                    end_rgb = cv2.cvtColor(end_frame, cv2.COLOR_BGR2RGB)
+                    st.image(end_rgb, caption=f"🔴 Lap End: {end_time:.1f}s", use_container_width=True)
+
+            # Trim & Confirm button — actually cuts the video file
+            if lap_dur > 5 and not st.session_state.get('trimmed_video_path'):
+                st.markdown("---")
+                if st.button("✂️ Trim & Confirm Lap", type="primary", use_container_width=True):
+                    with st.spinner(f"Trimming video to {lap_dur:.1f}s..."):
+                        try:
+                            trimmed_path = VideoProcessor.trim_video(
+                                video_path, start_time, end_time
+                            )
+                            st.session_state['trimmed_video_path'] = trimmed_path
+                            trimmed_meta = VideoProcessor.get_metadata(trimmed_path)
+                            st.session_state['trimmed_meta'] = trimmed_meta
+                            # Reset start/end to 0 and full duration of trimmed clip
+                            st.session_state['start_time'] = 0.0
+                            st.session_state['end_time'] = trimmed_meta['duration']
+                            st.rerun()
+                        except Exception as e:
+                            st.error(f"Trim failed: {e}")
+
+            # Show trimmed video if ready
+            if st.session_state.get('trimmed_video_path'):
+                trimmed_path = st.session_state['trimmed_video_path']
+                trimmed_meta = st.session_state.get('trimmed_meta', {})
+                st.success(
+                    f"Lap video trimmed: {trimmed_meta.get('duration', 0):.1f}s "
+                    f"({trimmed_meta.get('width', '?')}x{trimmed_meta.get('height', '?')})"
+                )
+                st.video(trimmed_path)
+
+                # Option to re-trim
+                if st.button("🔄 Re-trim (choose different start/end)"):
+                    VideoProcessor.cleanup_temp_file(trimmed_path)
+                    st.session_state.pop('trimmed_video_path', None)
+                    st.session_state.pop('trimmed_meta', None)
+                    st.rerun()
 
 
 # ═══════════════════════════════════════════════════════════
-# STEP 4: VIDEO ANALYSIS — Forward pass + Reverse run
+# STEP 4: VIDEO ANALYSIS — AI Detection + Interactive Review
 # ═══════════════════════════════════════════════════════════
-if (st.session_state.get('video_path') and st.session_state.get('track_model')
+# Use trimmed video if available, otherwise fall back to original
+_analysis_video = st.session_state.get('trimmed_video_path', st.session_state.get('video_path'))
+if (_analysis_video and st.session_state.get('track_model')
         and not st.session_state.get('corners')):
-    st.markdown("### Step 4 — Analyze Video (Forward + Reverse)")
-    st.caption("Forward pass detects corners using the track model. "
-               "Reverse run validates each gaze chain from exit → entry.")
 
-    if st.button("🔍 Analyze Video", type="primary"):
-        progress = st.progress(0)
-        status = st.status("Uploading video to Gemini...")
+    # ── Sub-step 4A: AI Corner Detection ──────────────────
+    # Only show detection button if we haven't detected yet
+    if not st.session_state.get('detected_corners'):
+        st.markdown("### Step 4A — AI Corner Detection")
+        st.caption("The AI watches your lap video and detects the braking marker, apex, and exit "
+                   "for each corner. You'll review and confirm each one next.")
 
-        try:
-            # Upload video
-            video_file = api.upload_video_gemini(
-                st.session_state['video_path'],
-                progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
-            )
+        if st.button("🔍 Detect Corners", type="primary"):
+            progress = st.progress(0)
+            status = st.status("Uploading video to Gemini...")
 
-            # FORWARD PASS — with track context
-            status.update(label="Forward pass: detecting corners with track context...")
-            forward_result = api.analyze_video_forward(
-                video_file,
-                start_time=st.session_state.get('start_time', 0),
-                end_time=st.session_state.get('end_time'),
-                track_model=st.session_state.get('track_model'),
-                progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
-            )
+            try:
+                upload_path = st.session_state.get('trimmed_video_path', st.session_state['video_path'])
+                video_file = api.upload_video_gemini(
+                    upload_path,
+                    progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
+                )
+                st.session_state['gemini_video_file'] = video_file
 
-            forward_corners = forward_result.get('corners', [])
+                if st.session_state.get('trimmed_video_path'):
+                    analysis_start = 0
+                    analysis_end = st.session_state.get('trimmed_meta', {}).get('duration')
+                else:
+                    analysis_start = st.session_state.get('start_time', 0)
+                    analysis_end = st.session_state.get('end_time')
 
-            if not forward_corners:
-                st.error("No corners detected in forward pass. Try adjusting trim bounds or sensitivity.")
-                st.stop()
+                status.update(label="Forward pass: detecting corners with track context...")
+                forward_result = api.analyze_video_forward(
+                    video_file,
+                    start_time=analysis_start,
+                    end_time=analysis_end,
+                    track_model=st.session_state.get('track_model'),
+                    progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
+                )
 
-            status.update(label=f"Forward: {len(forward_corners)} corners. Starting reverse run...")
+                forward_corners = forward_result.get('corners', [])
 
-            # REVERSE RUN — validate gaze chain exit→entry
-            reverse_result = api.analyze_video_reverse(
-                video_file,
-                forward_corners,
-                start_time=st.session_state.get('start_time', 0),
-                end_time=st.session_state.get('end_time'),
-                progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
-            )
+                if not forward_corners:
+                    st.error("No corners detected. Try adjusting trim bounds or check your video.")
+                    st.stop()
 
-            corners = reverse_result.get('corners', forward_corners)
-            reverse_notes = reverse_result.get('reverseRunNotes', '')
+                # Store detected corners for review
+                st.session_state['detected_corners'] = forward_corners
+                st.session_state['track_notes'] = forward_result.get('trackNotes', '')
+                st.session_state['analysis_start'] = analysis_start
+                st.session_state['analysis_end'] = analysis_end
 
-            # Merge with track model data if available
-            track_model = st.session_state.get('track_model', {})
-            map_corners = track_model.get('corners', [])
-            if map_corners:
-                corners = APIEngine.merge_corner_data(corners, map_corners)
+                # Initialise confirmed markers dict — all start as unconfirmed
+                confirmed = {}
+                for i, c in enumerate(forward_corners):
+                    markers = c.get('markers', {})
+                    confirmed[i] = {
+                        'corner_name': c.get('name', f'Corner {i+1}'),
+                        'direction': c.get('direction', ''),
+                        'severity': c.get('severity', ''),
+                        'brake': {
+                            'time': _extract_time(markers, 'brake', 'firstSight'),
+                            'confirmed': False,
+                            'gazeTarget': _extract_target(markers, 'brake', 'firstSight'),
+                        },
+                        'apex': {
+                            'time': _extract_time(markers, 'apex'),
+                            'confirmed': False,
+                            'gazeTarget': _extract_target(markers, 'apex'),
+                        },
+                        'exit': {
+                            'time': _extract_time(markers, 'exit'),
+                            'confirmed': False,
+                            'gazeTarget': _extract_target(markers, 'exit'),
+                        },
+                        'firstSight': {
+                            'time': None,  # Will be detected in reverse pass
+                            'confirmed': False,
+                            'gazeTarget': '',
+                        },
+                    }
+                st.session_state['confirmed_markers'] = confirmed
 
-            st.session_state['corners'] = corners
-            st.session_state['track_notes'] = forward_result.get('trackNotes', '')
-            st.session_state['reverse_notes'] = reverse_notes
+                progress.progress(100)
+                n = len(forward_corners)
+                status.update(label=f"Detected {n} corners — review them below", state="complete")
+                st.rerun()
 
-            progress.progress(100)
-            valid = sum(1 for c in corners if c.get('gazeChainValid', True))
-            status.update(
-                label=f"Done: {len(corners)} corners, {valid} clean gaze chains",
-                state="complete"
-            )
+            except Exception as e:
+                st.error(f"Video analysis failed: {e}")
 
-        except Exception as e:
-            st.error(f"Video analysis failed: {e}")
+    # ── Sub-step 4B: Interactive Marker Review ────────────
+    if st.session_state.get('detected_corners') and not st.session_state.get('markers_confirmed'):
+        st.markdown("### Step 4B — Review & Confirm Markers")
+        st.caption("For each corner the AI detected, check the frame preview. "
+                   "If it's right, confirm it. If it's wrong, use the slider to move the marker "
+                   "to the correct spot, then confirm.")
 
-# Display detected corners
+        confirmed_markers = st.session_state.get('confirmed_markers', {})
+        review_video = st.session_state.get('trimmed_video_path', st.session_state['video_path'])
+        review_meta = st.session_state.get('trimmed_meta', st.session_state.get('video_meta', {}))
+        review_duration = review_meta.get('duration', 60)
+
+        total_points = 0
+        total_confirmed = 0
+
+        for corner_idx in sorted(confirmed_markers.keys(), key=int):
+            cm = confirmed_markers[corner_idx]
+            corner_name = cm['corner_name']
+            direction = cm['direction']
+            severity = cm['severity']
+
+            # Count progress
+            for phase in ['brake', 'apex', 'exit']:
+                total_points += 1
+                if cm[phase]['confirmed']:
+                    total_confirmed += 1
+
+            # Corner header
+            all_confirmed = all(cm[p]['confirmed'] for p in ['brake', 'apex', 'exit'])
+            icon = "✅" if all_confirmed else "🔍"
+            with st.expander(f"{icon} Corner {int(corner_idx)+1}: {corner_name} ({direction} {severity})",
+                             expanded=not all_confirmed):
+
+                for phase in ['brake', 'apex', 'exit']:
+                    phase_data = cm[phase]
+                    phase_label = {'brake': 'Braking Marker', 'apex': 'Apex', 'exit': 'Exit'}[phase]
+                    detected_time = phase_data.get('time')
+                    is_confirmed = phase_data.get('confirmed', False)
+                    gaze_target = phase_data.get('gazeTarget', '')
+
+                    st.markdown(f"**{phase_label}** {'✅' if is_confirmed else '⏳'}")
+                    if gaze_target:
+                        st.caption(f"AI detected: {gaze_target}")
+
+                    if detected_time is not None:
+                        # Slider for adjusting the timestamp
+                        slider_key = f"marker_{corner_idx}_{phase}"
+                        adjusted_time = st.slider(
+                            f"Timestamp for {phase_label}",
+                            min_value=0.0,
+                            max_value=review_duration,
+                            value=float(detected_time),
+                            step=0.1,
+                            format="%.1fs",
+                            key=slider_key,
+                            disabled=is_confirmed,
+                        )
+
+                        # Show frame preview at this timestamp
+                        frame = VideoProcessor.get_frame_at_time(review_video, adjusted_time, width=480)
+                        if frame is not None:
+                            import cv2
+                            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            st.image(frame_rgb, caption=f"{phase_label} at {adjusted_time:.1f}s",
+                                     use_container_width=True)
+
+                        # Confirm / Re-adjust buttons
+                        btn_cols = st.columns([1, 1])
+                        if not is_confirmed:
+                            with btn_cols[0]:
+                                if st.button(f"✅ Confirm {phase_label}",
+                                             key=f"confirm_{corner_idx}_{phase}",
+                                             type="primary", use_container_width=True):
+                                    confirmed_markers[corner_idx][phase]['time'] = adjusted_time
+                                    confirmed_markers[corner_idx][phase]['confirmed'] = True
+                                    st.session_state['confirmed_markers'] = confirmed_markers
+                                    st.rerun()
+                        else:
+                            with btn_cols[0]:
+                                st.success(f"Confirmed at {phase_data['time']:.1f}s")
+                            with btn_cols[1]:
+                                if st.button(f"↩️ Re-adjust {phase_label}",
+                                             key=f"readjust_{corner_idx}_{phase}",
+                                             use_container_width=True):
+                                    confirmed_markers[corner_idx][phase]['confirmed'] = False
+                                    st.session_state['confirmed_markers'] = confirmed_markers
+                                    st.rerun()
+                    else:
+                        st.warning(f"AI could not detect {phase_label} for this corner. "
+                                   "Use the slider to set it manually.")
+                        manual_time = st.slider(
+                            f"Set {phase_label} timestamp",
+                            min_value=0.0,
+                            max_value=review_duration,
+                            value=review_duration / 2,
+                            step=0.1,
+                            format="%.1fs",
+                            key=f"manual_{corner_idx}_{phase}",
+                        )
+                        frame = VideoProcessor.get_frame_at_time(review_video, manual_time, width=480)
+                        if frame is not None:
+                            import cv2
+                            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                            st.image(frame_rgb, caption=f"{phase_label} at {manual_time:.1f}s",
+                                     use_container_width=True)
+                        if st.button(f"✅ Set {phase_label} here",
+                                     key=f"setmanual_{corner_idx}_{phase}",
+                                     type="primary"):
+                            confirmed_markers[corner_idx][phase]['time'] = manual_time
+                            confirmed_markers[corner_idx][phase]['confirmed'] = True
+                            st.session_state['confirmed_markers'] = confirmed_markers
+                            st.rerun()
+
+                    st.markdown("---")
+
+        # Progress bar
+        if total_points > 0:
+            st.progress(total_confirmed / total_points,
+                       text=f"{total_confirmed}/{total_points} markers confirmed")
+
+        # All confirmed → move to reverse pass
+        if total_confirmed == total_points and total_points > 0:
+            st.success("All forward markers confirmed! Now running reverse validation...")
+            if st.button("🔄 Run Reverse Pass (detect first-sight of braking markers)",
+                         type="primary"):
+                st.session_state['markers_confirmed'] = True
+                st.rerun()
+
+    # ── Sub-step 4C: Reverse Pass — First Sight Detection ─
+    if st.session_state.get('markers_confirmed') and not st.session_state.get('reverse_done'):
+        st.markdown("### Step 4C — Reverse Validation")
+        st.caption("The AI now re-watches the video backwards from each corner's exit "
+                   "to find when the braking marker FIRST becomes visible. "
+                   "This completes the 4-cue chain for the Quiet Eye protocol.")
+
+        if st.button("🔄 Run Reverse Analysis", type="primary"):
+            progress = st.progress(0)
+            status = st.status("Running reverse gaze chain validation...")
+
+            try:
+                # Re-upload video if needed (Gemini files expire)
+                video_file = st.session_state.get('gemini_video_file')
+                if video_file is None:
+                    upload_path = st.session_state.get('trimmed_video_path', st.session_state['video_path'])
+                    video_file = api.upload_video_gemini(
+                        upload_path,
+                        progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
+                    )
+
+                # Build corner data from confirmed markers
+                confirmed_markers = st.session_state['confirmed_markers']
+                forward_corners = []
+                for idx in sorted(confirmed_markers.keys(), key=int):
+                    cm = confirmed_markers[idx]
+                    forward_corners.append({
+                        'number': int(idx) + 1,
+                        'name': cm['corner_name'],
+                        'direction': cm['direction'],
+                        'severity': cm['severity'],
+                        'markers': {
+                            'brake': {
+                                'time': cm['brake']['time'],
+                                'gazeTarget': cm['brake'].get('gazeTarget', ''),
+                            },
+                            'apex': {
+                                'time': cm['apex']['time'],
+                                'gazeTarget': cm['apex'].get('gazeTarget', ''),
+                            },
+                            'exit': {
+                                'time': cm['exit']['time'],
+                                'gazeTarget': cm['exit'].get('gazeTarget', ''),
+                            },
+                        }
+                    })
+
+                status.update(label="Reverse pass: validating gaze chain exit → entry...")
+                reverse_result = api.analyze_video_reverse(
+                    video_file,
+                    forward_corners,
+                    start_time=st.session_state.get('analysis_start', 0),
+                    end_time=st.session_state.get('analysis_end'),
+                    progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
+                )
+
+                reverse_corners = reverse_result.get('corners', forward_corners)
+                reverse_notes = reverse_result.get('reverseRunNotes', '')
+
+                # Store first-sight times from reverse pass
+                for rc in reverse_corners:
+                    idx = rc.get('number', 1) - 1
+                    if idx in confirmed_markers:
+                        fs = rc.get('markers', {}).get('firstSight', {})
+                        if isinstance(fs, dict) and fs.get('time') is not None:
+                            confirmed_markers[idx]['firstSight']['time'] = float(fs['time'])
+                            confirmed_markers[idx]['firstSight']['gazeTarget'] = fs.get('gazeTarget', '')
+                        # Also update gaze chain validation info
+                        confirmed_markers[idx]['gazeChainValid'] = rc.get('gazeChainValid', True)
+                        confirmed_markers[idx]['gazeChainIssues'] = rc.get('gazeChainIssues', 'clean')
+
+                st.session_state['confirmed_markers'] = confirmed_markers
+                st.session_state['reverse_notes'] = reverse_notes
+                st.session_state['reverse_done'] = True
+
+                progress.progress(100)
+                status.update(label="Reverse pass complete — review first-sight markers", state="complete")
+                st.rerun()
+
+            except Exception as e:
+                st.error(f"Reverse analysis failed: {e}")
+
+    # ── Sub-step 4D: Review First-Sight + Final Confirm ───
+    if st.session_state.get('reverse_done') and not st.session_state.get('corners'):
+        st.markdown("### Step 4D — Review First-Sight Markers & Finalise")
+        st.caption("Check when the braking marker first becomes visible for each corner. "
+                   "Once confirmed, the AI memorises all markers and builds the conditioning video.")
+
+        confirmed_markers = st.session_state.get('confirmed_markers', {})
+        review_video = st.session_state.get('trimmed_video_path', st.session_state['video_path'])
+        review_meta = st.session_state.get('trimmed_meta', st.session_state.get('video_meta', {}))
+        review_duration = review_meta.get('duration', 60)
+
+        reverse_notes = st.session_state.get('reverse_notes', '')
+        if reverse_notes:
+            st.info(f"Reverse pass notes: {reverse_notes}")
+
+        all_fs_confirmed = True
+
+        for corner_idx in sorted(confirmed_markers.keys(), key=int):
+            cm = confirmed_markers[corner_idx]
+            corner_name = cm['corner_name']
+            fs = cm['firstSight']
+            fs_time = fs.get('time')
+            is_confirmed = fs.get('confirmed', False)
+            chain_valid = cm.get('gazeChainValid', True)
+            chain_icon = "✅" if chain_valid else "⚠️"
+
+            with st.expander(
+                f"{chain_icon} Corner {int(corner_idx)+1}: {corner_name} — First Sight "
+                f"{'✅' if is_confirmed else '⏳'}",
+                expanded=not is_confirmed
+            ):
+                if fs.get('gazeTarget'):
+                    st.caption(f"AI detected: {fs['gazeTarget']}")
+
+                chain_issues = cm.get('gazeChainIssues', '')
+                if chain_issues and chain_issues != 'clean':
+                    st.warning(f"Gaze chain issue: {chain_issues}")
+
+                # Show confirmed brake/apex/exit for context
+                st.markdown(f"Brake: **{cm['brake']['time']:.1f}s** | "
+                           f"Apex: **{cm['apex']['time']:.1f}s** | "
+                           f"Exit: **{cm['exit']['time']:.1f}s**")
+
+                if fs_time is not None:
+                    slider_key = f"fs_{corner_idx}"
+                    adjusted_fs = st.slider(
+                        "First-sight timestamp",
+                        min_value=0.0,
+                        max_value=review_duration,
+                        value=float(fs_time),
+                        step=0.1,
+                        format="%.1fs",
+                        key=slider_key,
+                        disabled=is_confirmed,
+                    )
+
+                    frame = VideoProcessor.get_frame_at_time(review_video, adjusted_fs, width=480)
+                    if frame is not None:
+                        import cv2
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        st.image(frame_rgb, caption=f"First sight at {adjusted_fs:.1f}s",
+                                 use_container_width=True)
+
+                    btn_cols = st.columns([1, 1])
+                    if not is_confirmed:
+                        all_fs_confirmed = False
+                        with btn_cols[0]:
+                            if st.button(f"✅ Confirm First Sight",
+                                         key=f"confirm_fs_{corner_idx}",
+                                         type="primary", use_container_width=True):
+                                confirmed_markers[corner_idx]['firstSight']['time'] = adjusted_fs
+                                confirmed_markers[corner_idx]['firstSight']['confirmed'] = True
+                                st.session_state['confirmed_markers'] = confirmed_markers
+                                st.rerun()
+                    else:
+                        with btn_cols[0]:
+                            st.success(f"Confirmed at {fs['time']:.1f}s")
+                        with btn_cols[1]:
+                            if st.button(f"↩️ Re-adjust",
+                                         key=f"readjust_fs_{corner_idx}",
+                                         use_container_width=True):
+                                confirmed_markers[corner_idx]['firstSight']['confirmed'] = False
+                                st.session_state['confirmed_markers'] = confirmed_markers
+                                st.rerun()
+                else:
+                    all_fs_confirmed = False
+                    st.warning("Reverse pass couldn't detect first sight. Set it manually.")
+                    # Default to 3s before brake
+                    default_fs = max(0, cm['brake']['time'] - 3.0)
+                    manual_fs = st.slider(
+                        "Set first-sight timestamp",
+                        min_value=0.0,
+                        max_value=review_duration,
+                        value=default_fs,
+                        step=0.1,
+                        format="%.1fs",
+                        key=f"manual_fs_{corner_idx}",
+                    )
+                    frame = VideoProcessor.get_frame_at_time(review_video, manual_fs, width=480)
+                    if frame is not None:
+                        import cv2
+                        frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+                        st.image(frame_rgb, caption=f"First sight at {manual_fs:.1f}s",
+                                 use_container_width=True)
+                    if st.button(f"✅ Set First Sight here",
+                                 key=f"setmanual_fs_{corner_idx}",
+                                 type="primary"):
+                        confirmed_markers[corner_idx]['firstSight']['time'] = manual_fs
+                        confirmed_markers[corner_idx]['firstSight']['confirmed'] = True
+                        st.session_state['confirmed_markers'] = confirmed_markers
+                        st.rerun()
+
+        # All first-sight confirmed → finalise corners
+        if all_fs_confirmed:
+            st.success("All markers confirmed and memorised!")
+            if st.button("🧠 Finalise Corners & Build Blueprint", type="primary"):
+                # Convert confirmed markers into the corners format for the pipeline
+                corners = []
+                for idx in sorted(confirmed_markers.keys(), key=int):
+                    cm = confirmed_markers[idx]
+
+                    # Merge with track model data if available
+                    track_model = st.session_state.get('track_model', {})
+                    map_corners = track_model.get('corners', [])
+                    extra = {}
+                    if int(idx) < len(map_corners):
+                        mc = map_corners[int(idx)]
+                        extra = {
+                            'geometry': mc.get('geometry', {}),
+                            'hazards': mc.get('hazards_visible', []),
+                        }
+
+                    corners.append({
+                        'number': int(idx) + 1,
+                        'name': cm['corner_name'],
+                        'direction': cm['direction'],
+                        'severity': cm['severity'],
+                        'markers': {
+                            'firstSight': {
+                                'time': cm['firstSight']['time'],
+                                'gazeTarget': cm['firstSight'].get('gazeTarget', ''),
+                                'confirmed': True,
+                            },
+                            'brake': {
+                                'time': cm['brake']['time'],
+                                'gazeTarget': cm['brake'].get('gazeTarget', ''),
+                                'confirmed': True,
+                            },
+                            'apex': {
+                                'time': cm['apex']['time'],
+                                'gazeTarget': cm['apex'].get('gazeTarget', ''),
+                                'confirmed': True,
+                            },
+                            'exit': {
+                                'time': cm['exit']['time'],
+                                'gazeTarget': cm['exit'].get('gazeTarget', ''),
+                                'confirmed': True,
+                            },
+                        },
+                        'gazeChainValid': cm.get('gazeChainValid', True),
+                        'gazeChainIssues': cm.get('gazeChainIssues', 'clean'),
+                        **extra,
+                    })
+
+                st.session_state['corners'] = corners
+                st.session_state['track_notes'] = st.session_state.get('track_notes', '')
+                st.rerun()
+
+# Display confirmed corners summary (if corners are set but blueprint not yet generated)
 corners = st.session_state.get('corners', [])
 if corners and not st.session_state.get('blueprint'):
-    st.markdown(f"**{len(corners)} corners detected and reverse-validated**")
-
-    reverse_notes = st.session_state.get('reverse_notes', '')
-    if reverse_notes:
-        st.info(f"Reverse run notes: {reverse_notes}")
+    st.markdown(f"**{len(corners)} corners — all markers confirmed**")
 
     for i, corner in enumerate(corners):
         name = corner.get('name', f'Corner {i+1}')
@@ -425,29 +942,17 @@ if corners and not st.session_state.get('blueprint'):
         chain_icon = "✅" if chain_valid else "⚠️"
 
         with st.expander(f"{chain_icon} Corner {i+1}: {name} ({direction} {severity})"):
-            markers = corner.get('markers', corner.get('cues', []))
+            markers = corner.get('markers', {})
             if isinstance(markers, dict):
                 for phase in ['firstSight', 'brake', 'apex', 'exit']:
                     data = markers.get(phase, {})
-                    if isinstance(data, dict) and data.get('gazeTarget'):
-                        validated = "✓" if data.get('reverseValidated') else ""
+                    if isinstance(data, dict) and data.get('time') is not None:
+                        confirmed = "✅" if data.get('confirmed') else ""
+                        target = data.get('gazeTarget', '')
                         st.markdown(
-                            f"**{phase}** (t={data.get('time', '?')}s): "
-                            f"{data['gazeTarget']} {validated}"
+                            f"**{phase}** (t={data['time']:.1f}s): "
+                            f"{target} {confirmed}"
                         )
-                        # Show gaze chain connectivity
-                        if phase == 'brake' and 'canSeeApexFromHere' in data:
-                            can_see = data['canSeeApexFromHere']
-                            st.caption(f"  → Can see apex from here: {'yes' if can_see else 'NO'}")
-                        elif phase == 'apex' and 'canSeeExitFromHere' in data:
-                            can_see = data['canSeeExitFromHere']
-                            st.caption(f"  → Can see exit from here: {'yes' if can_see else 'NO'}")
-
-            elif isinstance(markers, list):
-                for cue in markers:
-                    st.markdown(f"**{cue.get('label', '')}**")
-                    st.markdown(f"  Eyes: {cue.get('eyes', '')}")
-                    st.markdown(f"  Aware: {cue.get('aware', '')}")
 
             chain_issues = corner.get('gazeChainIssues', '')
             if chain_issues and chain_issues != 'clean':
@@ -576,7 +1081,9 @@ if blueprint:
         )
 
     with col3:
-        if st.session_state.get('video_path'):
+        # Use trimmed video if available, otherwise original
+        _protocol_video = st.session_state.get('trimmed_video_path', st.session_state.get('video_path'))
+        if _protocol_video:
             if st.button("🎬 Build Full Protocol Video (5 laps)"):
                 progress = st.progress(0)
                 status = st.status("Rendering 5-lap conditioning protocol...")
@@ -584,7 +1091,7 @@ if blueprint:
                 try:
                     track = blueprint.get('trackName', 'track').replace(' ', '_')
                     output = ConditioningRenderer.render_full_protocol(
-                        st.session_state['video_path'],
+                        _protocol_video,
                         blueprint,
                         progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
                     )
@@ -611,7 +1118,14 @@ if blueprint:
     # Reset button
     st.divider()
     if st.button("🔄 Start New Blueprint"):
+        # Clean up trimmed video temp file
+        trimmed = st.session_state.get('trimmed_video_path')
+        if trimmed:
+            VideoProcessor.cleanup_temp_file(trimmed)
         for key in ['blueprint', 'corners', 'track_model', 'video_path', 'video_name',
-                     'video_meta', 'conditioning_video', 'reverse_notes', 'track_notes']:
+                     'video_meta', 'conditioning_video', 'reverse_notes', 'track_notes',
+                     'trimmed_video_path', 'trimmed_meta', 'start_time', 'end_time', 'scrub_time',
+                     'detected_corners', 'confirmed_markers', 'markers_confirmed',
+                     'reverse_done', 'gemini_video_file', 'analysis_start', 'analysis_end']:
             st.session_state.pop(key, None)
         st.rerun()
