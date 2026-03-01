@@ -148,6 +148,18 @@ const App = {
         document.getElementById('settings-btn').addEventListener('click', () => modal.classList.remove('hidden'));
         document.getElementById('settings-close').addEventListener('click', () => modal.classList.add('hidden'));
         modal.querySelector('.modal-overlay').addEventListener('click', () => modal.classList.add('hidden'));
+        // ── Auto-save keys on input change (persist immediately) ──
+        const _autoSave = (inputId, saveFn) => {
+            const el = document.getElementById(inputId);
+            if (el) el.addEventListener('change', () => {
+                const v = el.value.trim();
+                if (v) saveFn(v);
+            });
+        };
+        _autoSave('api-key-input',    k => AIEngine.setGeminiKey(k));
+        _autoSave('claude-key-input', k => AIEngine.setClaudeKey(k));
+        _autoSave('openai-key-input', k => AIEngine.setOpenAIKey(k));
+
         document.getElementById('save-settings').addEventListener('click', () => {
             // Gemini key
             const geminiKey = document.getElementById('api-key-input').value.trim();
