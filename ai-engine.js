@@ -26,7 +26,7 @@ const AIEngine = {
     GEMINI_MODELS: {
         'gemini-2.0-flash': 'Gemini 2.0 Flash (Fast)',
         'gemini-2.0-flash-lite': 'Gemini 2.0 Flash-Lite (Fastest)',
-        'gemini-2.5-pro-preview-05-06': 'Gemini 2.5 Pro (Best)'
+        'gemini-2.5-pro': 'Gemini 2.5 Pro (Best)'
     },
 
     CLAUDE_MODELS: {
@@ -151,7 +151,7 @@ const AIEngine = {
 
         try {
             // Use Gemini 2.5 Pro for research (best quality + Google Search grounding)
-            const researchModel = 'gemini-2.5-pro-preview-05-06';
+            const researchModel = 'gemini-2.5-pro';
             const url = `https://generativelanguage.googleapis.com/v1beta/models/${researchModel}:generateContent?key=${this.geminiApiKey}`;
 
             if (onProgress) onProgress(15, 'Searching web for track data...');
@@ -503,7 +503,7 @@ IMPORTANT:
         if (onProgress) onProgress(20, `Sending ${pages.length} page(s) to Gemini Vision...`);
 
         try {
-            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro-preview-05-06:generateContent?key=${this.geminiApiKey}`;
+            const url = `https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-pro:generateContent?key=${this.geminiApiKey}`;
 
             const response = await fetch(url, {
                 method: 'POST',
