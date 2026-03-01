@@ -118,32 +118,57 @@ class VideoProcessor:
         return frames
 
     @staticmethod
-    def get_frame_at_time(video_path, time_sec, width=640):
+    def get_frame_at_time(video_path, time_sec, width=None):
         """
-        Get a single frame at a specific time.
+        Get a single high-quality frame at a precise timestamp using FFmpeg.
+
+        Uses FFmpeg's accurate seek to extract the exact frame — no keyframe
+        jumping artefacts. Returns full resolution by default.
 
         Args:
             video_path (str): Path to video file.
             time_sec (float): Time in seconds.
-            width (int): Target width for resizing. Default 640.
+            width (int|None): Target width for resizing. None = full resolution.
 
         Returns:
-            numpy.ndarray or None: Frame as numpy array (BGR), or None if frame cannot be extracted.
+            numpy.ndarray or None: Frame as numpy array (BGR).
         """
-        cap = cv2.VideoCapture(video_path)
-        fps = cap.get(cv2.CAP_PROP_FPS)
-        frame_num = int(time_sec * fps)
-        cap.set(cv2.CAP_PROP_POS_FRAMES, frame_num)
-        ret, frame = cap.read()
-        cap.release()
+        import subprocess
 
-        if not ret:
+        tmp_frame = tempfile.mktemp(suffix='.png')
+        try:
+            cmd = [
+                'ffmpeg', '-y',
+                '-ss', f'{time_sec:.3f}',
+                '-i', video_path,
+                '-frames:v', '1',
+                '-q:v', '1',
+                tmp_frame
+            ]
+            result = subprocess.run(cmd, capture_output=True, timeout=10)
+
+            if result.returncode != 0 or not os.path.exists(tmp_frame):
+                return None
+
+            frame = cv2.imread(tmp_frame)
+            if frame is None:
+                return None
+
+            if width is not None:
+                h, w_orig = frame.shape[:2]
+                scale = width / w_orig
+                new_h = int(h * scale)
+                frame = cv2.resize(frame, (width, new_h))
+
+            return frame
+
+        except (subprocess.TimeoutExpired, FileNotFoundError):
             return None
-
-        h, w = frame.shape[:2]
-        scale = width / w
-        new_h = int(h * scale)
-        return cv2.resize(frame, (width, new_h))
+        finally:
+            try:
+                os.remove(tmp_frame)
+            except OSError:
+                pass
 
     @staticmethod
     def get_frame_as_jpeg_b64(video_path, time_sec, width=320, quality=70):

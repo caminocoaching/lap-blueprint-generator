@@ -347,19 +347,17 @@ if st.session_state.get('track_model') and not st.session_state.get('blueprint')
         meta = st.session_state['video_meta']
         duration = meta['duration']
 
-        st.video(uploaded)
         st.caption(f"Duration: {meta['duration']:.1f}s | FPS: {meta['fps']:.0f} | "
                    f"Resolution: {meta['width']}x{meta['height']}")
 
         # ── Interactive Trim Controls ─────────────────────────
-        st.markdown("---")
         st.markdown("#### Trim to Single Lap")
 
         import cv2
 
         # Show frame preview at current scrub position (above the controls)
         scrub_time = st.session_state.get('scrub_time', 0.0)
-        frame = VideoProcessor.get_frame_at_time(video_path, scrub_time, width=640)
+        frame = VideoProcessor.get_frame_at_time(video_path, scrub_time)
         if frame is not None:
             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
             st.image(frame_rgb, caption=f"Frame at {scrub_time:.1f}s", use_container_width=True)
@@ -410,13 +408,13 @@ if st.session_state.get('track_model') and not st.session_state.get('blueprint')
             prev_col1, prev_col2 = st.columns(2)
 
             with prev_col1:
-                start_frame = VideoProcessor.get_frame_at_time(video_path, start_time, width=320)
+                start_frame = VideoProcessor.get_frame_at_time(video_path, start_time)
                 if start_frame is not None:
                     start_rgb = cv2.cvtColor(start_frame, cv2.COLOR_BGR2RGB)
                     st.image(start_rgb, caption=f"🟢 Lap Start: {start_time:.1f}s", use_container_width=True)
 
             with prev_col2:
-                end_frame = VideoProcessor.get_frame_at_time(video_path, end_time, width=320)
+                end_frame = VideoProcessor.get_frame_at_time(video_path, end_time)
                 if end_frame is not None:
                     end_rgb = cv2.cvtColor(end_frame, cv2.COLOR_BGR2RGB)
                     st.image(end_rgb, caption=f"🔴 Lap End: {end_time:.1f}s", use_container_width=True)
@@ -611,7 +609,7 @@ if (_analysis_video and st.session_state.get('track_model')
                         )
 
                         # Show frame preview at this timestamp
-                        frame = VideoProcessor.get_frame_at_time(review_video, adjusted_time, width=480)
+                        frame = VideoProcessor.get_frame_at_time(review_video, adjusted_time)
                         if frame is not None:
                             import cv2
                             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -651,7 +649,7 @@ if (_analysis_video and st.session_state.get('track_model')
                             format="%.1fs",
                             key=f"manual_{corner_idx}_{phase}",
                         )
-                        frame = VideoProcessor.get_frame_at_time(review_video, manual_time, width=480)
+                        frame = VideoProcessor.get_frame_at_time(review_video, manual_time)
                         if frame is not None:
                             import cv2
                             frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -818,7 +816,7 @@ if (_analysis_video and st.session_state.get('track_model')
                         disabled=is_confirmed,
                     )
 
-                    frame = VideoProcessor.get_frame_at_time(review_video, adjusted_fs, width=480)
+                    frame = VideoProcessor.get_frame_at_time(review_video, adjusted_fs)
                     if frame is not None:
                         import cv2
                         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
@@ -860,7 +858,7 @@ if (_analysis_video and st.session_state.get('track_model')
                         format="%.1fs",
                         key=f"manual_fs_{corner_idx}",
                     )
-                    frame = VideoProcessor.get_frame_at_time(review_video, manual_fs, width=480)
+                    frame = VideoProcessor.get_frame_at_time(review_video, manual_fs)
                     if frame is not None:
                         import cv2
                         frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
