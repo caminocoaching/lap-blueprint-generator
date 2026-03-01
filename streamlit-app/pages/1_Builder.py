@@ -354,28 +354,29 @@ if st.session_state.get('track_model') and not st.session_state.get('blueprint')
         # ── Interactive Trim Controls ─────────────────────────
         st.markdown("---")
         st.markdown("#### Trim to Single Lap")
-        st.caption("Use the scrubber to find the right frame, then click the button to set it as the start or end of your lap.")
 
-        # Scrubber slider — browse through the video frame by frame
+        import cv2
+
+        # Show frame preview at current scrub position (above the controls)
+        scrub_time = st.session_state.get('scrub_time', 0.0)
+        frame = VideoProcessor.get_frame_at_time(video_path, scrub_time, width=640)
+        if frame is not None:
+            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
+            st.image(frame_rgb, caption=f"Frame at {scrub_time:.1f}s", use_container_width=True)
+
+        # Scrubber slider — directly under the frame preview
         scrub_time = st.slider(
             "Scrub through video",
             min_value=0.0,
             max_value=duration,
-            value=st.session_state.get('scrub_time', 0.0),
+            value=scrub_time,
             step=0.1,
             format="%.1fs",
             key="scrubber"
         )
         st.session_state['scrub_time'] = scrub_time
 
-        # Show frame preview at current scrub position
-        import cv2
-        frame = VideoProcessor.get_frame_at_time(video_path, scrub_time, width=640)
-        if frame is not None:
-            frame_rgb = cv2.cvtColor(frame, cv2.COLOR_BGR2RGB)
-            st.image(frame_rgb, caption=f"Frame at {scrub_time:.1f}s", use_container_width=True)
-
-        # Set Start / Set End buttons
+        # Buttons right below the scrubber
         btn_col1, btn_col2, btn_col3 = st.columns([1, 1, 1])
 
         with btn_col1:
