@@ -401,11 +401,14 @@ body {
     position: relative;
     width: 90%;
     max-width: 480px;
+    max-height: 90vh;
     background: var(--bg-secondary);
     border: 1px solid var(--border-medium);
     border-radius: var(--radius-lg);
     box-shadow: var(--shadow-lg);
     overflow: hidden;
+    display: flex;
+    flex-direction: column;
 }
 
 .modal-header {
@@ -443,6 +446,8 @@ body {
 
 .modal-body {
     padding: var(--space-lg);
+    overflow-y: auto;
+    flex: 1;
 }
 
 /* === Forms === */
@@ -2368,6 +2373,296 @@ select.form-input {
     margin: 0 auto;
 }
 
+/* Pipeline Step Indicator */
+/* ═══════════════════════════════════════════
+   PIPELINE GUIDE — Step-by-Step Builder
+   ═══════════════════════════════════════════ */
+
+.pipeline-guide {
+    margin-bottom: 32px;
+}
+
+.pipeline-guide-header {
+    text-align: center;
+    margin-bottom: 20px;
+}
+
+.pipeline-guide-title {
+    font-family: var(--font-mono);
+    font-size: 0.85rem;
+    font-weight: 800;
+    letter-spacing: 2px;
+    color: var(--accent-cyan);
+    margin-bottom: 4px;
+}
+
+.pipeline-guide-sub {
+    font-size: 0.8rem;
+    color: var(--text-muted);
+}
+
+.pipeline-steps-bar {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 0;
+    padding: 12px 0 16px;
+    overflow-x: auto;
+}
+
+.pipeline-step {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    cursor: pointer;
+    transition: all 0.2s;
+    opacity: 0.4;
+    min-width: 0;
+    flex-shrink: 1;
+}
+
+.pipeline-step:hover {
+    opacity: 0.7;
+    background: rgba(255, 255, 255, 0.05);
+}
+
+.pipeline-step.active {
+    opacity: 1;
+    background: rgba(139, 92, 246, 0.1);
+    border-color: rgba(139, 92, 246, 0.4);
+    box-shadow: 0 0 20px rgba(139, 92, 246, 0.1);
+}
+
+.pipeline-step.completed {
+    opacity: 0.85;
+    border-color: rgba(16, 185, 129, 0.4);
+    background: rgba(16, 185, 129, 0.05);
+}
+
+.pipeline-step-connector {
+    width: 20px;
+    height: 2px;
+    background: rgba(255, 255, 255, 0.08);
+    flex-shrink: 0;
+}
+
+.pipeline-step.completed + .pipeline-step-connector {
+    background: rgba(16, 185, 129, 0.3);
+}
+
+.pipeline-step-num {
+    width: 26px;
+    height: 26px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 12px;
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    flex-shrink: 0;
+}
+
+.pipeline-step.active .pipeline-step-num {
+    background: rgba(139, 92, 246, 0.35);
+    color: #e0d4fd;
+    box-shadow: 0 0 10px rgba(139, 92, 246, 0.3);
+}
+
+.pipeline-step.completed .pipeline-step-num {
+    background: rgba(16, 185, 129, 0.25);
+    color: #10b981;
+}
+
+.pipeline-step.completed .pipeline-step-num::after {
+    content: '✓';
+    position: absolute;
+}
+
+.pipeline-step-info {
+    min-width: 0;
+}
+
+.pipeline-step-label {
+    font-size: 12px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    white-space: nowrap;
+}
+
+.pipeline-step.active .pipeline-step-label {
+    color: var(--text-primary);
+}
+
+.pipeline-step-desc {
+    font-size: 10px;
+    color: var(--text-muted);
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+}
+
+/* ── Four Cues Reference ── */
+.four-cues-ref {
+    background: rgba(0, 240, 255, 0.04);
+    border: 1px solid rgba(0, 240, 255, 0.15);
+    border-radius: 12px;
+    padding: 16px 20px;
+    margin-bottom: 16px;
+}
+
+.four-cues-title {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: rgba(0, 240, 255, 0.7);
+    margin-bottom: 10px;
+    text-align: center;
+}
+
+.four-cues-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 6px 16px;
+}
+
+.four-cue-item {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 4px 0;
+}
+
+.four-cue-num {
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 800;
+    font-size: 11px;
+    background: rgba(0, 240, 255, 0.15);
+    color: var(--accent-cyan);
+    flex-shrink: 0;
+}
+
+/* ── How It Works ── */
+.pipeline-how-it-works {
+    margin-bottom: 8px;
+}
+
+.how-toggle {
+    display: block;
+    width: 100%;
+    text-align: center;
+    padding: 10px;
+    background: none;
+    border: 1px solid rgba(255, 255, 255, 0.06);
+    border-radius: 8px;
+    color: var(--text-muted);
+    font-size: 0.78rem;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.how-toggle:hover {
+    background: rgba(255, 255, 255, 0.03);
+    color: var(--text-secondary);
+}
+
+.how-content {
+    padding: 20px 0 0;
+}
+
+.how-flow {
+    display: flex;
+    flex-direction: column;
+    gap: 4px;
+    align-items: center;
+}
+
+.how-step {
+    width: 100%;
+    max-width: 480px;
+    padding: 14px 18px;
+    border-radius: 10px;
+    background: rgba(255, 255, 255, 0.02);
+    border: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.how-step-icon {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-size: 16px;
+    margin-bottom: 6px;
+}
+
+.how-step-label {
+    font-family: var(--font-mono);
+    font-size: 0.7rem;
+    font-weight: 700;
+    letter-spacing: 0.5px;
+    color: var(--text-secondary);
+    margin-bottom: 4px;
+}
+
+.how-step-job {
+    font-size: 0.78rem;
+    color: var(--text-secondary);
+    line-height: 1.5;
+    margin-bottom: 6px;
+}
+
+.how-step-out {
+    font-family: var(--font-mono);
+    font-size: 0.68rem;
+    color: var(--text-muted);
+    padding: 4px 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 4px;
+    display: inline-block;
+}
+
+.how-arrow {
+    color: var(--text-muted);
+    font-size: 14px;
+    opacity: 0.3;
+    line-height: 1;
+}
+
+@media (max-width: 640px) {
+    .pipeline-steps-bar {
+        flex-wrap: wrap;
+        gap: 4px;
+        justify-content: center;
+    }
+    .pipeline-step {
+        padding: 6px 10px;
+    }
+    .pipeline-step-desc {
+        display: none;
+    }
+    .pipeline-step-connector {
+        display: none;
+    }
+    .four-cues-grid {
+        grid-template-columns: 1fr;
+    }
+}
+
 .builder-phase {
     margin-bottom: var(--space-2xl);
 }
@@ -4139,6 +4434,219 @@ select.form-input {
     }
 }
 
+
+/* ============================================================
+   AUTO-DETECT — Gemini Full Video Forward Pass
+   ============================================================ */
+
+.auto-detect-panel {
+    background: var(--bg-card);
+    border: 1px solid rgba(139, 92, 246, 0.25);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 16px;
+}
+
+.auto-detect-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 16px;
+}
+
+.auto-detect-title {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.auto-detect-title h3 {
+    margin: 0;
+    font-size: 18px;
+    font-weight: 700;
+    color: var(--text-primary);
+}
+
+.auto-detect-subtitle {
+    margin: 4px 0 0;
+    font-size: 13px;
+    color: var(--text-muted);
+}
+
+.auto-detect-badge {
+    background: rgba(139, 92, 246, 0.15);
+    color: #a78bfa;
+    font-size: 11px;
+    font-weight: 700;
+    padding: 4px 10px;
+    border-radius: 6px;
+    letter-spacing: 0.5px;
+}
+
+.auto-detect-action {
+    margin-top: 12px;
+}
+
+.auto-detect-hint {
+    margin: 10px 0 0;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-align: center;
+}
+
+.auto-detect-btn:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 6px 24px rgba(139, 92, 246, 0.4) !important;
+}
+
+.auto-detect-results-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 12px;
+}
+
+.auto-detect-results-header h4 {
+    margin: 0;
+    font-size: 16px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.auto-detect-results-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.auto-detect-corners-list {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.auto-detect-corner-card {
+    background: rgba(255, 255, 255, 0.03);
+    border: 1px solid rgba(255, 255, 255, 0.08);
+    border-radius: 10px;
+    padding: 12px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    transition: border-color 0.2s;
+}
+
+.auto-detect-corner-card:hover {
+    border-color: rgba(139, 92, 246, 0.3);
+}
+
+.ad-corner-num {
+    width: 36px;
+    height: 36px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-weight: 700;
+    font-size: 14px;
+    flex-shrink: 0;
+}
+
+.ad-corner-num.left {
+    background: rgba(0, 240, 255, 0.15);
+    color: #00f0ff;
+}
+
+.ad-corner-num.right {
+    background: rgba(255, 107, 53, 0.15);
+    color: #ff6b35;
+}
+
+.ad-corner-info {
+    flex: 1;
+    min-width: 0;
+}
+
+.ad-corner-name {
+    font-weight: 600;
+    font-size: 14px;
+    color: var(--text-primary);
+}
+
+.ad-corner-type {
+    font-size: 12px;
+    color: var(--text-muted);
+    margin-top: 2px;
+}
+
+.ad-corner-timestamps {
+    display: flex;
+    gap: 10px;
+    font-size: 11px;
+    font-family: 'JetBrains Mono', monospace;
+    color: var(--text-muted);
+}
+
+.ad-corner-timestamps span {
+    display: flex;
+    align-items: center;
+    gap: 3px;
+}
+
+.ad-corner-conf {
+    width: 40px;
+    text-align: right;
+    font-size: 12px;
+    font-weight: 600;
+    flex-shrink: 0;
+}
+
+.ad-corner-conf.high { color: #10b981; }
+.ad-corner-conf.medium { color: #f59e0b; }
+.ad-corner-conf.low { color: #ef4444; }
+
+.ad-corner-delete {
+    background: none;
+    border: none;
+    color: var(--text-muted);
+    cursor: pointer;
+    font-size: 16px;
+    padding: 4px;
+    opacity: 0;
+    transition: opacity 0.2s;
+}
+
+.auto-detect-corner-card:hover .ad-corner-delete {
+    opacity: 0.6;
+}
+
+.ad-corner-delete:hover {
+    opacity: 1 !important;
+    color: #ef4444;
+}
+
+.method-divider {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin: 8px 0 16px;
+    position: relative;
+}
+
+.method-divider::before,
+.method-divider::after {
+    content: '';
+    flex: 1;
+    height: 1px;
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.method-divider-text {
+    padding: 0 16px;
+    font-size: 12px;
+    color: var(--text-muted);
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
 
 /* ============================================================
    CORNER WIZARD — AI-Guided Interactive Marking
