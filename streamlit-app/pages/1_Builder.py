@@ -29,9 +29,8 @@ if not gemini_key or not claude_key:
 from src.api_engine import APIEngine
 from src.video_processor import VideoProcessor
 from src.blueprint_pipeline import BlueprintPipeline
-from src.ruapuna_blueprint import is_ruapuna, get_blueprint as get_ruapuna, get_track_model as get_ruapuna_track_model
 from src.track_store import (
-    has_saved_data, load_track, save_track, merge_ai_research,
+    save_track, merge_ai_research,
     merge_map_analysis, merge_guide_data, update_corner, add_corner, remove_corner
 )
 from src.conditioning_renderer import ConditioningRenderer
@@ -97,23 +96,8 @@ st.session_state['track_name'] = track_name
 # at 2B as a pre-filled template. New data always welcome.
 # ═══════════════════════════════════════════════════════════
 
-# ── Load existing knowledge as a STARTING POINT ──────────
-# Same process every time. Pre-built or saved data enters at 2B
-# (confirm template). You still go through every step.
-if track_name and not st.session_state.get('track_model'):
-    saved = load_track(track_name)
-    if saved:
-        st.session_state['track_model'] = saved
-        st.session_state['sweep1_done'] = True
-        # User still needs to confirm template and do guide sweep
-    elif is_ruapuna(track_name):
-        prebuilt = get_ruapuna_track_model()
-        st.session_state['track_model'] = prebuilt
-        st.session_state['sweep1_done'] = True
-        # User still needs to confirm template and do guide sweep
-        save_track(prebuilt)
-
 # ── Step 2 header and progress ────────────────────────────
+# Every blueprint starts from zero. Upload map → confirm → upload guide → go.
 if track_name and not st.session_state.get('blueprint'):
     st.markdown("### Step 2 — Build Track Model")
 
