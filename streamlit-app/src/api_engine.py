@@ -692,38 +692,94 @@ Return JSON:
 
         model = genai.GenerativeModel(self.gemini_model)
 
-        prompt = f"""You are a motorsport track analyst with expert spatial reasoning.
-Look at this track map of {track_name}.
+        prompt = f"""ROLE: You are an expert Motorsport Performance Analyst and Track Engineer.
 
-YOUR ONLY JOB: Count the corners and identify their basic properties.
+OBJECTIVE: Analyze this image of the {track_name} racing circuit layout and
+deconstruct its technical characteristics with the precision of a race engineer.
 
-STEP 1 — DETERMINE TRACK DIRECTION:
-- Look at the start/finish straight and any direction arrows on the map
-- If there's a pit lane, cars exit pits in the racing direction
-- Determine if the circuit runs CLOCKWISE or COUNTER-CLOCKWISE
+═══════════════════════════════════════════════════════════
+CONTEXTUAL DEFINITIONS — WHAT YOU ARE LOOKING AT:
+═══════════════════════════════════════════════════════════
 
-STEP 2 — TRACE THE LAP:
-Starting from the start/finish straight, follow the racing direction around the
-entire circuit. At EVERY point where the track curves, identify:
-1. Is the curve to the LEFT or RIGHT from the driver's perspective?
-2. How tight is it? (hairpin / tight / medium / fast_sweeper / kink)
+THE RIBBON: The track is a continuous tarmac loop — a closed circuit. The dark
+ribbon on the image IS the racing surface. Everything outside it is run-off,
+grass, gravel, or barriers.
+
+START/FINISH: Look for a line crossing the track (often coloured — green, red,
+or white). If there's an arrow near this line, it shows the DIRECTION OF TRAVEL.
+Cars cross this line to begin and end each lap.
+
+DIRECTION OF TRAVEL: If there is an arrow on the map, it points IN THE DIRECTION
+the cars drive. Follow it. If the arrow points RIGHT from the start line, the
+first corner is to the RIGHT of the start line. The corners must be driven in
+NUMERICAL ORDER (Turn 1, Turn 2, Turn 3...) following this direction.
+
+PIT LANE: A parallel strip running alongside the main straight. Cars EXIT pits
+in the same direction as the racing direction. Pit lane is NOT a corner.
+
+CORNER ANATOMY: Every numbered turn has:
+  - A BRAKING ZONE: The approach where the car slows down
+  - An APEX: The innermost point of the turn (closest to inside kerb)
+  - An EXIT: Where the car straightens and accelerates toward the next section
+
+CORNER TYPES:
+  - HAIRPIN: Very tight, nearly 180° reversal of direction (very slow speed)
+  - TIGHT: Sharp corner requiring heavy braking (slow speed)
+  - MEDIUM: Moderate corner, moderate braking (medium speed)
+  - FAST SWEEPER: Long, flowing curve at high speed (light or no braking)
+  - KINK: Barely a corner — slight change of direction at near full speed
+
+═══════════════════════════════════════════════════════════
+YOUR TASK — SYSTEMATIC ANALYSIS:
+═══════════════════════════════════════════════════════════
+
+STEP 1 — FIND THE START/FINISH LINE AND DIRECTION ARROW:
+  - Locate the start/finish line on the map
+  - Find the direction arrow — it tells you which way cars travel
+  - Determine: is the overall circuit flow CLOCKWISE or COUNTER-CLOCKWISE?
+
+STEP 2 — TRACE THE RIBBON:
+  Starting from the start/finish line, follow the tarmac ribbon in the direction
+  of the arrow. Mentally DRIVE the circuit. You are sitting in the car, steering.
+  At every point where you must turn the steering wheel, that is a CORNER.
+
+  For each corner ask yourself:
+  - Am I turning the wheel LEFT or RIGHT? (from the DRIVER's perspective,
+    sitting in the car, looking forward through the windscreen)
+  - How FAR am I turning it? (hairpin/tight/medium/fast_sweeper/kink)
 
 STEP 3 — NUMBER THE CORNERS:
-Number each corner sequentially in the order the driver encounters them.
+  Number each corner sequentially: Turn 1, Turn 2, Turn 3... in the order the
+  driver encounters them following the racing direction.
 
-RULES:
-- Count EVERY distinct change of direction as a separate corner
-- A kink is still a corner (just a fast one)
-- A chicane = 2 corners (one left, one right or vice versa)
-- A long sweeper that doesn't change direction = 1 corner
-- LEFT means the track curves to the driver's LEFT as they drive through it
-- RIGHT means the track curves to the driver's RIGHT as they drive through it
-- Be VERY precise about left vs right — mentally drive the track and feel the steering
+  If corners are already numbered on the map, use those numbers.
+  If corners are named on the map, include those names.
 
-DO NOT:
-- Guess at corner names unless they're labelled on the map
-- Invent visual references you can't see
-- Include pit lane or pit entry as corners
+═══════════════════════════════════════════════════════════
+CRITICAL RULES:
+═══════════════════════════════════════════════════════════
+
+  - Every distinct change of steering direction = a separate corner
+  - A chicane = 2 corners (left-right or right-left)
+  - A long sweeper that curves ONE way = 1 corner
+  - A kink counts as a corner (fast, but still a direction change)
+  - LEFT means the driver turns the wheel LEFT (car goes left)
+  - RIGHT means the driver turns the wheel RIGHT (car goes right)
+  - Do NOT include pit lane entry/exit as corners
+  - Do NOT guess corner names — only use names visible on the map
+  - Do NOT invent visual references you cannot see
+
+═══════════════════════════════════════════════════════════
+SELF-CHECK BEFORE ANSWERING:
+═══════════════════════════════════════════════════════════
+
+Before returning your answer, verify:
+  1. Did you follow the direction arrow from the start line?
+  2. Are the corners numbered in the order the DRIVER encounters them?
+  3. For each corner, did you determine left/right from the DRIVER's perspective
+     (sitting in the car, looking forward)?
+  4. Does your left/right count make sense for the overall shape of the circuit?
+     (e.g., a counter-clockwise circuit will have MORE left turns than right turns)
 
 Return JSON:
 {{
@@ -731,6 +787,7 @@ Return JSON:
   "trackDirection": "clockwise|counter-clockwise",
   "totalCorners": <int>,
   "cornerSummary": "<X left-hand corners, Y right-hand corners>",
+  "directionEvidence": "<what told you the direction: arrow location, pit lane, numbering>",
   "corners": [
     {{
       "number": <int>,
@@ -739,7 +796,7 @@ Return JSON:
       "name": "<only if labelled on map, otherwise empty string>"
     }}
   ],
-  "layoutNotes": "<brief description of overall layout shape>"
+  "layoutNotes": "<brief description of overall layout shape and personality>"
 }}"""
 
         # Build content parts: image + prompt

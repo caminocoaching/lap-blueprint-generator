@@ -152,6 +152,7 @@ if track_name and not st.session_state.get('blueprint'):
                                 'corners': corners,
                                 'trackDirection': template.get('trackDirection', ''),
                                 'cornerSummary': template.get('cornerSummary', ''),
+                                'directionEvidence': template.get('directionEvidence', ''),
                                 'layoutNotes': template.get('layoutNotes', ''),
                                 'trackCharacteristics': '',
                             }
@@ -217,7 +218,11 @@ if track_name and not st.session_state.get('blueprint'):
 
         st.markdown(f"**{n_corners} corners detected ({left_count} left, {right_count} right)**")
         if track_model.get('trackDirection'):
-            st.caption(f"Direction: {track_model['trackDirection']}")
+            st.markdown(f"**Direction:** {track_model['trackDirection']}")
+        if track_model.get('directionEvidence'):
+            st.caption(f"Evidence: {track_model['directionEvidence']}")
+        if track_model.get('layoutNotes'):
+            st.caption(f"Layout: {track_model['layoutNotes']}")
 
         # Show each corner with inline edit
         for c in corners:
