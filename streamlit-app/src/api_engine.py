@@ -764,31 +764,40 @@ Return JSON:
 
 Find every NUMBERED CORNER on the map (they are in circles).
 
-For each corner, describe:
-1. The compass direction the track is heading AS IT APPROACHES this corner
-   (use 8-point compass: N, NE, E, SE, S, SW, W, NW)
-2. The compass direction the track is heading AS IT LEAVES this corner
-3. How tight the curve is: kink / gentle / moderate / sharp / hairpin
+For each corner, report the BEARING (0-360 degrees) the track is heading:
+- BEFORE the corner (approach bearing)
+- AFTER the corner (exit bearing)
 
-Also find the DIRECTION ARROW that shows which way cars drive.
+BEARING REFERENCE:
+  0° = North (up on the map)
+  90° = East (right on the map)
+  180° = South (down on the map)
+  270° = West (left on the map)
+
+So if the track is heading toward the upper-right of the map, that's about 45°.
+If heading toward the lower-left, that's about 225°.
+
+For each corner also report how tight it looks:
+  kink / gentle / moderate / sharp / hairpin
+
+Also find the DIRECTION ARROW showing which way cars drive.
 
 CRITICAL RULES:
-- Do NOT say "left" or "right" for any turn direction
-- ONLY use compass headings to describe the track direction
+- Do NOT say "left" or "right" for turn direction
+- Report bearings as numbers 0-360
 - Follow corners in numerical order (1, 2, 3...)
-- The approach heading is the direction BEFORE the curve
-- The exit heading is the direction AFTER the curve
+- Be as precise as you can with the bearings (e.g., 75° not just 90°)
 
 Return JSON:
 {{
   "trackName": "{track_name}",
-  "arrowDescription": "<where the arrow is and what compass direction it points>",
+  "arrowDescription": "<where the arrow is and approximate bearing it points>",
   "totalCorners": <int>,
   "corners": [
     {{
       "number": <int>,
-      "approachHeading": "<N/NE/E/SE/S/SW/W/NW>",
-      "exitHeading": "<N/NE/E/SE/S/SW/W/NW>",
+      "approachBearing": <degrees 0-360>,
+      "exitBearing": <degrees 0-360>,
       "tightness": "kink|gentle|moderate|sharp|hairpin"
     }}
   ]
@@ -832,7 +841,7 @@ Return JSON:
             corners_raw = pass1_result.get('corners', [])
             print(f"[Sweep1 Pass1] Found {len(corners_raw)} corners")
             for c in corners_raw:
-                print(f"  Corner {c.get('number')}: {c.get('approachHeading')} → {c.get('exitHeading')} ({c.get('tightness')})")
+                print(f"  Corner {c.get('number')}: {c.get('approachBearing')}° → {c.get('exitBearing')}° ({c.get('tightness')})")
 
             if not corners_raw:
                 raise ValueError("Gemini found 0 corners in the map image")
@@ -846,104 +855,87 @@ Return JSON:
             raise
 
         # ═══════════════════════════════════════════════════════
-        # PASS 2 — CLAUDE REASONING: Compute L/R from headings
-        # Pure text reasoning — no image, no spatial confusion
+        # PASS 2 — PYTHON MATH: Compute L/R from degree bearings
+        # No AI needed — just arithmetic on bearing numbers.
+        # Bearing change = (exit - approach) normalized to -180..+180
+        # Positive = RIGHT turn, Negative = LEFT turn
         # ═══════════════════════════════════════════════════════
-        pass1_json = json.dumps(pass1_result, indent=2)
+        if progress_cb:
+            progress_cb(25, "Pass 2: Computing L/R from bearings (deterministic math)...")
 
-        pass2_system = """You are a navigation expert. You compute turn directions from compass headings.
-Return ONLY valid JSON. No markdown code blocks, no explanation outside the JSON."""
+        severity_map = {
+            'kink': 'kink', 'gentle': 'fast_sweeper', 'moderate': 'medium',
+            'sharp': 'tight', 'hairpin': 'hairpin'
+        }
 
-        pass2_user = f"""A racing circuit called {track_name} has been analyzed. Here are the compass headings
-at each corner (approach direction and exit direction):
+        computed_corners = []
+        left_count = 0
+        right_count = 0
+        reasoning_parts = []
 
-{pass1_json}
+        for c in corners_raw:
+            num = c.get('number', 0)
+            approach = float(c.get('approachBearing', 0))
+            exit_b = float(c.get('exitBearing', 0))
+            tightness = c.get('tightness', 'moderate')
 
-YOUR TASK: For each corner, determine if it is a LEFT or RIGHT turn.
+            # Compute bearing change, normalized to -180..+180
+            delta = (exit_b - approach) % 360
+            if delta > 180:
+                delta -= 360
+            # Positive delta = clockwise rotation = RIGHT turn
+            # Negative delta = counter-clockwise rotation = LEFT turn
 
-THE RULE:
-- Imagine you are facing the APPROACH heading direction
-- The EXIT heading tells you which way you turned
-- If the exit heading is COUNTER-CLOCKWISE from the approach heading → LEFT turn
-  Examples: facing East, exit North = LEFT. Facing South, exit East = LEFT.
-- If the exit heading is CLOCKWISE from the approach heading → RIGHT turn
-  Examples: facing East, exit South = RIGHT. Facing North, exit East = RIGHT.
+            if delta > 0:
+                direction = 'right'
+                right_count += 1
+            elif delta < 0:
+                direction = 'left'
+                left_count += 1
+            else:
+                direction = 'straight'
 
-COMPASS ROSE (clockwise order):
-N → NE → E → SE → S → SW → W → NW → back to N
+            severity = severity_map.get(tightness, 'medium')
 
-Work through EACH corner step by step.
+            computed_corners.append({
+                'number': num,
+                'direction': direction,
+                'severity': severity,
+                'name': '',
+                'approachBearing': approach,
+                'exitBearing': exit_b,
+                'bearingChange': delta,
+            })
 
-Then count: how many LEFT turns and how many RIGHT turns?
-- More LEFT turns → counter-clockwise circuit
-- More RIGHT turns → clockwise circuit
+            reasoning_parts.append(
+                f"C{num}: {approach}° → {exit_b}° = Δ{delta:+.0f}° → {direction.upper()}"
+            )
+            print(f"  Corner {num}: {approach}° → {exit_b}° = Δ{delta:+.0f}° → {direction} {severity}")
 
-SEVERITY MAPPING:
-kink → kink, gentle → fast_sweeper, moderate → medium, sharp → tight, hairpin → hairpin
+        # Determine overall circuit direction
+        if left_count > right_count:
+            track_direction = 'counter-clockwise'
+        else:
+            track_direction = 'clockwise'
 
-Return JSON:
-{{
-  "trackName": "{track_name}",
-  "trackDirection": "clockwise|counter-clockwise",
-  "totalCorners": <int>,
-  "cornerSummary": "<X left, Y right>",
-  "reasoning": "<step by step for each corner>",
-  "corners": [
-    {{
-      "number": <int>,
-      "approachHeading": "<from above>",
-      "exitHeading": "<from above>",
-      "direction": "left|right",
-      "severity": "hairpin|tight|medium|fast_sweeper|kink",
-      "name": ""
-    }}
-  ],
-  "layoutNotes": "<brief description>"
-}}"""
+        result = {
+            'trackName': track_name,
+            'trackDirection': track_direction,
+            'totalCorners': len(computed_corners),
+            'cornerSummary': f"{left_count} left, {right_count} right",
+            'directionEvidence': '; '.join(reasoning_parts),
+            'corners': computed_corners,
+            'layoutNotes': f"{track_name}: {len(computed_corners)} corners, "
+                          f"{left_count}L/{right_count}R, {track_direction}. "
+                          f"Directions computed from bearing deltas."
+        }
 
         if progress_cb:
-            progress_cb(25, "Pass 2: Claude computing L/R from compass headings...")
+            progress_cb(40, f"Sweep 1: {len(computed_corners)} corners "
+                           f"({left_count}L, {right_count}R) — {track_direction}")
 
-        try:
-            pass2_response = self.claude_client.messages.create(
-                model=self.claude_model,
-                max_tokens=4096,
-                temperature=0,
-                system=pass2_system,
-                messages=[{"role": "user", "content": pass2_user}]
-            )
-
-            raw_text = pass2_response.content[0].text.strip()
-            print(f"[Sweep1 Pass2 Claude] response length={len(raw_text)}, first 300 chars: {raw_text[:300]}")
-
-            # Strip markdown code blocks if present
-            if raw_text.startswith('```'):
-                lines = raw_text.split('\n')
-                raw_text = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
-
-            try:
-                result = json.loads(raw_text)
-            except json.JSONDecodeError:
-                result = _repair_json(raw_text)
-
-            result['directionEvidence'] = result.get('reasoning', '')
-            result['totalCorners'] = len(result.get('corners', []))
-
-            if progress_cb:
-                corners = result.get('corners', [])
-                left = sum(1 for c in corners if c.get('direction') == 'left')
-                right = sum(1 for c in corners if c.get('direction') == 'right')
-                direction = result.get('trackDirection', '?')
-                progress_cb(40, f"Sweep 1: {len(corners)} corners ({left}L, {right}R) — {direction}")
-
-            print(f"[Sweep1] FINAL: {result.get('cornerSummary', '?')}, {result.get('trackDirection', '?')}")
-            return result
-
-        except Exception as e:
-            if progress_cb:
-                progress_cb(40, f"Pass 2 error: {e}")
-            print(f"[Sweep1 Pass2 Claude] error: {e}")
-            raise
+        print(f"[Sweep1] FINAL: {left_count}L, {right_count}R, {track_direction}")
+        return result
 
     # ── SWEEP 2: Guide → Enrich Template ──────────────────────
 
