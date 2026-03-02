@@ -83,20 +83,18 @@ track_name = st.text_input(
 st.session_state['track_name'] = track_name
 
 # ═══════════════════════════════════════════════════════════
-# STEP 2: TRACK ANALYSIS — Guided Two-Sweep Pipeline
+# STEP 2: TRACK ANALYSIS — Two-Sweep Pipeline
 #
-# Same process every time:
-#   2A. Upload Track Map → Run Sweep 1 (corner template)
-#   2B. Review Template → Confirm or edit corners
-#   2C. Upload Track Guide → Run Sweep 2 (visual references)
-#   2D. Review enriched model → Confirm and proceed to video
+# Flow:
+#   2A. Upload Track Map + Track Guide → Run Sweep 1 + Sweep 2
+#   2B. Review combined result → Confirm or edit corners
+#   2C. Ready for video
 #
-# The app is always learning. Pre-built data (Ruapuna) enters
-# at 2B as a pre-filled template. New data always welcome.
+# Both inputs are collected first, then both sweeps run,
+# then the user reviews the COMBINED result once.
 # ═══════════════════════════════════════════════════════════
 
 # ── Step 2 header and progress ────────────────────────────
-# Every blueprint starts from zero. Upload map → confirm → upload guide → go.
 if track_name and not st.session_state.get('blueprint'):
     st.markdown("### Step 2 — Build Track Model")
 
@@ -104,7 +102,6 @@ if track_name and not st.session_state.get('blueprint'):
     reset_col1, reset_col2 = st.columns([4, 1])
     with reset_col2:
         if st.button("🔄 Reset All", help="Clear everything and start from scratch"):
-            # Clean up trimmed video temp file
             trimmed = st.session_state.get('trimmed_video_path')
             if trimmed:
                 VideoProcessor.cleanup_temp_file(trimmed)
@@ -118,24 +115,24 @@ if track_name and not st.session_state.get('blueprint'):
                 st.session_state.pop(key, None)
             st.rerun()
 
-    sweep1_done = st.session_state.get('sweep1_done', False)
+    sweeps_done = st.session_state.get('sweep1_done', False)
     template_confirmed = st.session_state.get('template_confirmed', False)
-    sweep2_done = st.session_state.get('sweep2_done', False)
 
     # Progress bar
-    step_col = st.columns(4)
-    step_col[0].markdown(f"{'✅' if sweep1_done else '👉' if not sweep1_done else '⬜'} **2A** Map → Template")
-    step_col[1].markdown(f"{'✅' if template_confirmed else '👉' if sweep1_done and not template_confirmed else '⬜'} **2B** Confirm Template")
-    step_col[2].markdown(f"{'✅' if sweep2_done else '👉' if template_confirmed and not sweep2_done else '⬜'} **2C** Guide → References")
-    step_col[3].markdown(f"{'✅' if sweep2_done else '⬜'} **2D** Ready for Video")
+    step_col = st.columns(3)
+    step_col[0].markdown(f"{'✅' if sweeps_done else '👉'} **2A** Upload Map + Guide → Run Analysis")
+    step_col[1].markdown(f"{'✅' if template_confirmed else '👉' if sweeps_done else '⬜'} **2B** Review & Confirm")
+    step_col[2].markdown(f"{'✅' if template_confirmed else '⬜'} **2C** Ready for Video")
 
     # ═══════════════════════════════════════════════════════
-    # 2A: UPLOAD MAP → RUN SWEEP 1
+    # 2A: UPLOAD MAP + GUIDE → RUN SWEEP 1 + SWEEP 2
     # ═══════════════════════════════════════════════════════
-    if not sweep1_done:
-        st.markdown("#### 2A — Upload Track Map")
-        st.caption("The track map gives us the corner template: how many corners, left or right, how tight.")
+    if not sweeps_done:
+        st.markdown("#### 2A — Upload Track Data")
+        st.caption("Upload the track map and track guide. Both sweeps run together to build the full track model.")
 
+        # --- Track Map ---
+        st.markdown("**Track Map** (required)")
         track_map = st.file_uploader(
             "Upload a track map image (bird's-eye layout)",
             type=["jpg", "jpeg", "png", "webp"],
@@ -145,16 +142,45 @@ if track_name and not st.session_state.get('blueprint'):
             st.session_state['track_map'] = track_map
             st.image(track_map, caption="Track Map", use_container_width=True)
 
-        has_map = st.session_state.get('track_map') is not None
+        # --- Track Guide ---
+        st.markdown("**Track Guide** (optional — adds braking markers, apex refs, racing lines)")
+        track_guide = st.file_uploader(
+            "Upload a track guide (PDF, image, or text)",
+            type=["pdf", "jpg", "jpeg", "png", "txt", "md"],
+            key="track_guide_upload"
+        )
+        if track_guide:
+            st.session_state['track_guide'] = track_guide
+            if track_guide.type and track_guide.type.startswith('image'):
+                st.image(track_guide, caption="Track Guide", use_container_width=True)
+            else:
+                st.success(f"Loaded: {track_guide.name}")
 
+            # Extract text from guide
+            guide_name = track_guide.name.lower()
+            if guide_name.endswith('.txt') or guide_name.endswith('.md'):
+                guide_text = track_guide.getvalue().decode('utf-8', errors='ignore')
+                st.session_state['track_guide_text'] = guide_text
+            elif guide_name.endswith(('.jpg', '.jpeg', '.png')):
+                st.session_state['track_guide_text'] = f"[Track guide image uploaded: {track_guide.name}]"
+            else:
+                st.session_state['track_guide_text'] = f"[Track guide uploaded: {track_guide.name}]"
+
+        has_map = st.session_state.get('track_map') is not None
+        has_guide = st.session_state.get('track_guide_text', '') != ''
+        has_claude = bool(st.session_state.get('claude_key', ''))
+
+        # --- Run buttons ---
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
             if has_map:
-                if st.button("🗺️ Run Sweep 1 — Extract Template from Map", type="primary"):
+                guide_note = " + Guide" if has_guide else ""
+                if st.button(f"🗺️ Run Analysis — Map{guide_note}", type="primary"):
                     progress = st.progress(0)
-                    status = st.status("Sweep 1: Reading track map with Gemini...")
+                    status = st.status("Sweep 1: Reading track map with Gemini Pro...")
 
                     try:
+                        # --- SWEEP 1: Map → Template ---
                         map_bytes = st.session_state['track_map'].getvalue()
                         map_b64 = base64.b64encode(map_bytes).decode()
 
@@ -164,7 +190,9 @@ if track_name and not st.session_state.get('blueprint'):
                         )
 
                         corners = template.get('corners', [])
-                        if corners:
+                        if not corners:
+                            status.update(label="No corners detected — try a clearer map image", state="error")
+                        else:
                             track_model = {
                                 'trackName': track_name,
                                 'corners': corners,
@@ -174,15 +202,59 @@ if track_name and not st.session_state.get('blueprint'):
                                 'layoutNotes': template.get('layoutNotes', ''),
                                 'trackCharacteristics': '',
                             }
-                            st.session_state['track_model'] = track_model
-                            st.session_state['sweep1_done'] = True
                             n = len(corners)
                             left = sum(1 for c in corners if c.get('direction') == 'left')
-                            status.update(label=f"Template: {n} corners ({left}L, {n-left}R)", state="complete")
+
+                            # --- SWEEP 2: Guide → Enrich (if guide provided) ---
+                            if has_guide and has_claude:
+                                status.update(label="Sweep 2: Enriching with track guide...")
+                                guide_text = st.session_state.get('track_guide_text', '')
+
+                                try:
+                                    enriched = api.enrich_template_with_guide(
+                                        track_model, guide_text, track_name,
+                                        progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
+                                    )
+
+                                    enriched_corners = enriched.get('corners', [])
+                                    for ec in enriched_corners:
+                                        for tc in track_model['corners']:
+                                            if ec.get('number') == tc.get('number'):
+                                                if ec.get('name'):
+                                                    tc['name'] = ec['name']
+                                                if ec.get('visual_targets'):
+                                                    tc['visual_targets'] = ec['visual_targets']
+                                                if ec.get('racingLineNotes'):
+                                                    tc['racingLineNotes'] = ec['racingLineNotes']
+                                                if ec.get('hazards'):
+                                                    tc['hazards'] = ec['hazards']
+                                                if ec.get('guideNotes'):
+                                                    tc['guideNotes'] = ec['guideNotes']
+                                                if ec.get('elevation'):
+                                                    tc.setdefault('geometry', {})['elevation'] = ec['elevation']
+                                                if ec.get('camber'):
+                                                    tc.setdefault('geometry', {})['camber'] = ec['camber']
+
+                                    if enriched.get('trackCharacteristics'):
+                                        track_model['trackCharacteristics'] = enriched['trackCharacteristics']
+
+                                except Exception as e:
+                                    st.warning(f"Sweep 2 (guide enrichment) failed: {e}. Continuing with map data only.")
+
+                            st.session_state['track_model'] = track_model
+                            st.session_state['sweep1_done'] = True
+                            st.session_state['sweep2_done'] = has_guide and has_claude
+                            save_track(track_model)
+
+                            enriched_count = sum(1 for c in track_model['corners']
+                                                 if c.get('visual_targets', {}).get('braking'))
+                            guide_msg = f", {enriched_count} enriched with guide" if enriched_count else ""
+                            status.update(
+                                label=f"Done: {n} corners ({left}L, {n-left}R){guide_msg}",
+                                state="complete"
+                            )
                             progress.progress(100)
                             st.rerun()
-                        else:
-                            status.update(label="No corners detected — try a clearer map image", state="error")
 
                     except Exception as e:
                         st.error(f"Sweep 1 failed: {e}")
@@ -222,25 +294,30 @@ if track_name and not st.session_state.get('blueprint'):
                     st.error(f"Research failed: {e}")
 
     # ═══════════════════════════════════════════════════════
-    # 2B: REVIEW & CONFIRM TEMPLATE
+    # 2B: REVIEW & CONFIRM COMBINED RESULT
     # ═══════════════════════════════════════════════════════
-    elif sweep1_done and not template_confirmed:
-        st.markdown("#### 2B — Review Corner Template")
-        st.caption("Check the corners are right. Edit any that are wrong, then confirm.")
+    elif sweeps_done and not template_confirmed:
+        st.markdown("#### 2B — Review Track Model")
+        st.caption("Check the corners are right. Edit any that are wrong, then confirm to proceed to video.")
 
         track_model = st.session_state.get('track_model', {})
         corners = track_model.get('corners', [])
         n_corners = len(corners)
         left_count = sum(1 for c in corners if c.get('direction') == 'left')
         right_count = n_corners - left_count
+        enriched_count = sum(1 for c in corners if c.get('visual_targets', {}).get('braking'))
 
         st.markdown(f"**{n_corners} corners detected ({left_count} left, {right_count} right)**")
+        if enriched_count:
+            st.markdown(f"**{enriched_count}/{n_corners}** corners enriched with visual references from guide")
         if track_model.get('trackDirection'):
             st.markdown(f"**Direction:** {track_model['trackDirection']}")
         if track_model.get('directionEvidence'):
             st.caption(f"Evidence: {track_model['directionEvidence']}")
         if track_model.get('layoutNotes'):
             st.caption(f"Layout: {track_model['layoutNotes']}")
+        if track_model.get('trackCharacteristics'):
+            st.caption(f"Characteristics: {track_model['trackCharacteristics']}")
 
         # Show each corner with inline edit
         for c in corners:
@@ -248,8 +325,11 @@ if track_name and not st.session_state.get('blueprint'):
             name = c.get('name', '') or f"Corner {c_num}"
             direction = c.get('direction', 'left')
             severity = c.get('severity', 'medium')
+            vt = c.get('visual_targets', {})
+            has_refs = bool(vt.get('braking'))
 
-            with st.expander(f"Corner {c_num}: {name} ({direction} {severity})", expanded=False):
+            label = f"{'✅' if has_refs else ''} Corner {c_num}: {name} ({direction} {severity})"
+            with st.expander(label, expanded=False):
                 edit_cols = st.columns(3)
                 new_name = edit_cols[0].text_input("Name", value=name, key=f"t_name_{c_num}")
                 new_dir = edit_cols[1].selectbox(
@@ -263,6 +343,15 @@ if track_name and not st.session_state.get('blueprint'):
                     index=sev_options.index(severity) if severity in sev_options else 2,
                     key=f"t_sev_{c_num}"
                 )
+
+                # Show visual references if enriched
+                if has_refs:
+                    st.markdown(f"**Brake:** {vt.get('braking', '—')} | "
+                                f"**Apex:** {vt.get('apex', '—')} | "
+                                f"**Exit:** {vt.get('exit', '—')}")
+                notes = c.get('racingLineNotes', c.get('guideNotes', c.get('notes', '')))
+                if notes:
+                    st.caption(f"Notes: {notes}")
 
                 if st.button(f"Update Corner {c_num}", key=f"t_save_{c_num}"):
                     updated = update_corner(
@@ -298,136 +387,24 @@ if track_name and not st.session_state.get('blueprint'):
         st.markdown("---")
         confirm_col1, confirm_col2 = st.columns([3, 1])
         with confirm_col1:
-            if st.button("✅ Template is correct — proceed to Track Guide", type="primary"):
+            if st.button("✅ Track model confirmed — proceed to video", type="primary"):
                 save_track(st.session_state['track_model'])
                 st.session_state['template_confirmed'] = True
+                st.session_state['sweep2_done'] = True
                 st.rerun()
         with confirm_col2:
-            if st.button("🔄 Re-run Sweep 1"):
+            if st.button("🔄 Re-run Analysis"):
                 st.session_state['sweep1_done'] = False
+                st.session_state['sweep2_done'] = False
                 if 'track_model' in st.session_state:
                     del st.session_state['track_model']
                 st.rerun()
 
     # ═══════════════════════════════════════════════════════
-    # 2C: UPLOAD GUIDE → RUN SWEEP 2
+    # 2C: READY FOR VIDEO (brief confirmation)
     # ═══════════════════════════════════════════════════════
-    elif template_confirmed and not sweep2_done:
-        st.markdown("#### 2C — Upload Track Guide")
-        st.caption("The guide fills in the detail: braking markers, apex references, racing lines. "
-                   "This is what the video AI will look for.")
-
-        # Show confirmed template summary
-        track_model = st.session_state.get('track_model', {})
-        corners = track_model.get('corners', [])
-        n = len(corners)
-        left = sum(1 for c in corners if c.get('direction') == 'left')
-        existing_refs = sum(1 for c in corners if c.get('visual_targets', {}).get('braking'))
-
-        st.info(f"Template: {n} corners ({left}L, {n-left}R) — {existing_refs} already have visual references")
-
-        # Show existing references so user can see what's there
-        if existing_refs > 0:
-            with st.expander(f"Current visual references ({existing_refs}/{n} corners)", expanded=False):
-                for c in corners:
-                    vt = c.get('visual_targets', {})
-                    if vt.get('braking'):
-                        st.markdown(f"**C{c.get('number')}** {c.get('name', '')}: "
-                                    f"Brake={vt.get('braking', '—')} | "
-                                    f"Apex={vt.get('apex', '—')} | "
-                                    f"Exit={vt.get('exit', '—')}")
-                    else:
-                        st.markdown(f"**C{c.get('number')}** {c.get('name', '')}: *no references yet*")
-            st.caption("Upload a track guide to update or improve these references.")
-
-        track_guide = st.file_uploader(
-            "Upload a track guide (PDF, image, or text)",
-            type=["pdf", "jpg", "jpeg", "png", "txt", "md"],
-            key="track_guide_upload"
-        )
-        if track_guide:
-            st.session_state['track_guide'] = track_guide
-            if track_guide.type and track_guide.type.startswith('image'):
-                st.image(track_guide, caption="Track Guide", use_container_width=True)
-            else:
-                st.success(f"Loaded: {track_guide.name}")
-
-            # Extract text
-            guide_name = track_guide.name.lower()
-            if guide_name.endswith('.txt') or guide_name.endswith('.md'):
-                guide_text = track_guide.getvalue().decode('utf-8', errors='ignore')
-                st.session_state['track_guide_text'] = guide_text
-            elif guide_name.endswith(('.jpg', '.jpeg', '.png')):
-                st.session_state['track_guide_text'] = f"[Track guide image uploaded: {track_guide.name}]"
-            else:
-                st.session_state['track_guide_text'] = f"[Track guide uploaded: {track_guide.name}]"
-
-        has_guide = st.session_state.get('track_guide_text', '') != ''
-        has_claude = bool(st.session_state.get('claude_key', ''))
-
-        guide_btn_col1, guide_btn_col2 = st.columns(2)
-        with guide_btn_col1:
-            if has_guide and has_claude:
-                if st.button("📖 Run Sweep 2 — Map Guide onto Template", type="primary"):
-                    progress = st.progress(0)
-                    status = st.status("Sweep 2: Reading track guide...")
-                    guide_text = st.session_state.get('track_guide_text', '')
-
-                    try:
-                        enriched = api.enrich_template_with_guide(
-                            track_model, guide_text, track_name,
-                            progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
-                        )
-
-                        enriched_corners = enriched.get('corners', [])
-                        for ec in enriched_corners:
-                            for tc in track_model['corners']:
-                                if ec.get('number') == tc.get('number'):
-                                    if ec.get('name'):
-                                        tc['name'] = ec['name']
-                                    if ec.get('visual_targets'):
-                                        tc['visual_targets'] = ec['visual_targets']
-                                    if ec.get('racingLineNotes'):
-                                        tc['racingLineNotes'] = ec['racingLineNotes']
-                                    if ec.get('hazards'):
-                                        tc['hazards'] = ec['hazards']
-                                    if ec.get('guideNotes'):
-                                        tc['guideNotes'] = ec['guideNotes']
-                                    if ec.get('elevation'):
-                                        tc.setdefault('geometry', {})['elevation'] = ec['elevation']
-                                    if ec.get('camber'):
-                                        tc.setdefault('geometry', {})['camber'] = ec['camber']
-
-                        if enriched.get('trackCharacteristics'):
-                            track_model['trackCharacteristics'] = enriched['trackCharacteristics']
-
-                        st.session_state['track_model'] = track_model
-                        st.session_state['sweep2_done'] = True
-                        save_track(track_model)
-
-                        enriched_count = sum(1 for c in corners if c.get('visual_targets', {}).get('braking'))
-                        status.update(label=f"Sweep 2 done: {enriched_count}/{n} corners enriched", state="complete")
-                        progress.progress(100)
-                        st.rerun()
-
-                    except Exception as e:
-                        st.error(f"Sweep 2 failed: {e}")
-
-            elif has_guide and not has_claude:
-                st.warning("Add your **Claude API key** in the sidebar for guide enrichment.")
-
-        with guide_btn_col2:
-            skip_label = "Skip — use existing references" if existing_refs > 0 else "Skip — no guide, proceed to video"
-            if st.button(skip_label):
-                st.session_state['sweep2_done'] = True
-                save_track(st.session_state['track_model'])
-                st.rerun()
-
-    # ═══════════════════════════════════════════════════════
-    # 2D: REVIEW ENRICHED MODEL
-    # ═══════════════════════════════════════════════════════
-    elif sweep2_done:
-        st.markdown("#### 2D — Track Model Ready")
+    elif template_confirmed:
+        st.markdown("#### 2C — Track Model Ready")
 
         track_model = st.session_state.get('track_model', {})
         corners = track_model.get('corners', [])
