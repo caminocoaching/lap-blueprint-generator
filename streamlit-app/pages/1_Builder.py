@@ -97,33 +97,21 @@ st.session_state['track_name'] = track_name
 # at 2B as a pre-filled template. New data always welcome.
 # ═══════════════════════════════════════════════════════════
 
-# ── Load existing knowledge if available ──────────────────
+# ── Load existing knowledge as a STARTING POINT ──────────
+# Same process every time. Pre-built or saved data enters at 2B
+# (confirm template). You still go through every step.
 if track_name and not st.session_state.get('track_model'):
     saved = load_track(track_name)
     if saved:
         st.session_state['track_model'] = saved
         st.session_state['sweep1_done'] = True
-        st.session_state['template_confirmed'] = True
-        # If it has visual targets, sweep 2 was done too
-        has_vt = any(c.get('visual_targets', {}).get('braking')
-                     for c in saved.get('corners', []))
-        if has_vt:
-            st.session_state['sweep2_done'] = True
+        # User still needs to confirm template and do guide sweep
     elif is_ruapuna(track_name):
         prebuilt = get_ruapuna_track_model()
         st.session_state['track_model'] = prebuilt
         st.session_state['sweep1_done'] = True
-        st.session_state['template_confirmed'] = True
-        st.session_state['sweep2_done'] = True
+        # User still needs to confirm template and do guide sweep
         save_track(prebuilt)
-
-# ── Ruapuna shortcut to full blueprint ────────────────────
-if track_name and is_ruapuna(track_name) and not st.session_state.get('blueprint'):
-    if st.button("Load Full Ruapuna QE Blueprint", type="primary"):
-        ruapuna = get_ruapuna()
-        st.session_state['blueprint'] = ruapuna
-        st.session_state['corners'] = ruapuna.get('sections', [])
-        st.rerun()
 
 # ── Step 2 header and progress ────────────────────────────
 if track_name and not st.session_state.get('blueprint'):
@@ -331,7 +319,23 @@ if track_name and not st.session_state.get('blueprint'):
         corners = track_model.get('corners', [])
         n = len(corners)
         left = sum(1 for c in corners if c.get('direction') == 'left')
-        st.info(f"Template: {n} corners ({left}L, {n-left}R) — confirmed")
+        existing_refs = sum(1 for c in corners if c.get('visual_targets', {}).get('braking'))
+
+        st.info(f"Template: {n} corners ({left}L, {n-left}R) — {existing_refs} already have visual references")
+
+        # Show existing references so user can see what's there
+        if existing_refs > 0:
+            with st.expander(f"Current visual references ({existing_refs}/{n} corners)", expanded=False):
+                for c in corners:
+                    vt = c.get('visual_targets', {})
+                    if vt.get('braking'):
+                        st.markdown(f"**C{c.get('number')}** {c.get('name', '')}: "
+                                    f"Brake={vt.get('braking', '—')} | "
+                                    f"Apex={vt.get('apex', '—')} | "
+                                    f"Exit={vt.get('exit', '—')}")
+                    else:
+                        st.markdown(f"**C{c.get('number')}** {c.get('name', '')}: *no references yet*")
+            st.caption("Upload a track guide to update or improve these references.")
 
         track_guide = st.file_uploader(
             "Upload a track guide (PDF, image, or text)",
@@ -410,7 +414,8 @@ if track_name and not st.session_state.get('blueprint'):
                 st.warning("Add your **Claude API key** in the sidebar for guide enrichment.")
 
         with guide_btn_col2:
-            if st.button("Skip — no guide available, proceed to video"):
+            skip_label = "Skip — use existing references" if existing_refs > 0 else "Skip — no guide, proceed to video"
+            if st.button(skip_label):
                 st.session_state['sweep2_done'] = True
                 save_track(st.session_state['track_model'])
                 st.rerun()
