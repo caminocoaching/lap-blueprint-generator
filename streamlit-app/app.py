@@ -29,19 +29,7 @@ def _save_keys(keys_dict):
         pass
 
 # Load saved keys into session state on first run
-# Priority: 1) Streamlit secrets (set in Cloud dashboard) 2) .keys.json 3) manual input
 if 'keys_loaded' not in st.session_state:
-    # First try Streamlit secrets (survives reboots on Streamlit Cloud)
-    try:
-        if hasattr(st, 'secrets'):
-            for secret_key, state_key in [('GEMINI_KEY', 'gemini_key'), ('CLAUDE_KEY', 'claude_key')]:
-                val = st.secrets.get(secret_key, '')
-                if val and state_key not in st.session_state:
-                    st.session_state[state_key] = val
-    except Exception:
-        pass
-
-    # Then try .keys.json (local persistence)
     saved = _load_saved_keys()
     for k, v in saved.items():
         if v and k not in st.session_state:
@@ -151,8 +139,8 @@ with st.sidebar:
     with st.expander("⚙️ Model Settings"):
         gemini_model = st.selectbox(
             "Gemini Model",
-            ["gemini-2.5-flash", "gemini-2.5-flash-lite", "gemini-2.5-pro"],
-            help="Flash recommended for speed/cost balance"
+            ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"],
+            help="Pro for accuracy (map reading always uses Pro). Flash for speed on video."
         )
         st.session_state['gemini_model'] = gemini_model
 

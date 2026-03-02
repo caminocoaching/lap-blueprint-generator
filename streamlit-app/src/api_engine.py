@@ -674,28 +674,26 @@ Return JSON:
         """
         SWEEP 1: Extract the track TEMPLATE from a map image using Gemini.
 
-        This is the first pass — just the structure:
-        - How many corners?
-        - Left or right?
-        - Rough severity (hairpin/tight/medium/fast/kink)
-        - Corner sequence around the lap
+        Uses a 3-pass approach that SEPARATES vision from spatial reasoning:
+          Pass 1 (VISION): Describe what you see — compass headings at each corner
+          Pass 2 (REASONING, no image): Compute L/R from heading changes + direction
+          Pass 3 (VISION): Confirm severity of each corner by looking at the map again
 
-        Uses Gemini (strongest visual/spatial reasoning) — NOT GPT-4o.
-        Does NOT try to identify specific visual targets (that's Sweep 2).
-        The template is the skeleton that everything else hangs on.
+        This works because AI models score 10/10 on DESCRIBING images but fail
+        at SPATIAL REASONING about left/right. By separating the two tasks,
+        we get accurate results from both.
         """
         if not self.gemini_key:
             raise ValueError("Gemini API key not configured — required for track map reading")
 
         if progress_cb:
-            progress_cb(10, "Sweep 1: Reading track map with Gemini...")
+            progress_cb(5, "Sweep 1: Reading track map with Gemini Pro (3-pass)...")
 
         # Use Pro model for map reading — spatial reasoning needs the best model
-        # Video analysis can use Flash for speed, but map reading is one-shot accuracy
         map_model_name = 'gemini-2.5-pro'
         model = genai.GenerativeModel(map_model_name)
 
-        # Build image part (reused in both passes)
+        # Build image part (reused in vision passes)
         image_part = {
             "inline_data": {
                 "mime_type": "image/jpeg",
@@ -704,58 +702,69 @@ Return JSON:
         }
 
         # ═══════════════════════════════════════════════════════
-        # PASS 1: Determine direction and count corners
+        # PASS 1 — PURE VISION: Describe geometry, no L/R judgment
         # ═══════════════════════════════════════════════════════
-        pass1_prompt = f"""You are an expert Motorsport Track Engineer analyzing a circuit map.
+        # Key insight: AI describes images perfectly (10/10) but reasons
+        # about L/R incorrectly. So we ask ONLY for descriptions here.
+        pass1_prompt = f"""You are analyzing a circuit map image of {track_name}.
 
-WHAT YOU ARE LOOKING AT:
-This image shows a racing circuit — a continuous tarmac loop. The dark ribbon
-is the racing surface.
+YOUR TASK: DESCRIBE what you see. Do NOT judge left or right — just describe geometry.
 
-YOUR TASK — Answer these questions about the {track_name} circuit:
+1. ARROW: Find the direction arrow on the map. Describe:
+   - Where on the map is the arrow?
+   - What COMPASS direction does the arrow point? (N, NE, E, SE, S, SW, W, NW)
+   - Is the arrow on the main straight?
 
-1. FIND THE DIRECTION ARROW on the map. Where is it? What direction does it point?
-   The arrow shows which way cars DRIVE around the circuit.
+2. NUMBERED CORNERS: Find all numbered corners (in circles on the map).
+   List every number you can see.
 
-2. FIND THE NUMBERED CORNERS. The corners are numbered in blue circles.
-   List the numbers you can see (e.g., 1, 2, 3... 11).
+3. For EACH numbered corner, describe the GEOMETRY of the track AT that point.
+   DO NOT say "left" or "right". Instead, describe:
+   - What COMPASS direction is the track heading APPROACHING this corner?
+     (e.g., "heading North", "heading Southeast")
+   - What COMPASS direction is the track heading LEAVING this corner?
+     (e.g., "heading West", "heading Northwest")
+   - How TIGHT is the curve? (barely deflects / gentle arc / moderate bend /
+     sharp bend / hairpin — almost reverses direction)
+   - POSITION on the map: is this corner at the top/bottom/left/right of the circuit?
 
-3. Starting from the arrow, the cars drive toward Corner 1, then Corner 2,
-   then Corner 3, and so on in numerical order.
-   Following this sequence around the full circuit — does the overall flow
-   go CLOCKWISE or COUNTER-CLOCKWISE around the loop?
+4. OVERALL SHAPE: Describe the overall shape of the circuit.
+   Where is the main straight? Where does the circuit go from there?
 
-4. TRACE CORNERS 1, 2, and 3 specifically:
-   - From the start/finish straight, the car drives toward Corner 1.
-   - At Corner 1, does the TRACK RIBBON curve to the LEFT or RIGHT?
-   - At Corner 2, does the TRACK RIBBON curve to the LEFT or RIGHT?
-   - At Corner 3, does the TRACK RIBBON curve to the LEFT or RIGHT?
-
-IMPORTANT: LEFT/RIGHT is determined by the DIRECTION THE TRACK CURVES on the map
-as you follow the numbered sequence. If the ribbon bends leftward going from
-Corner N toward Corner N+1, that is a LEFT turn.
+CRITICAL: Do NOT use the words "left" or "right" for turn direction.
+Only use compass directions and geometric descriptions.
 
 Return JSON:
 {{
-  "arrowLocation": "<where on the map the arrow is and which direction it points>",
-  "cornersFound": [<list of corner numbers visible on map>],
-  "trackDirection": "clockwise|counter-clockwise",
-  "directionReasoning": "<explain step by step how you determined CW or CCW>",
-  "corner1direction": "left|right",
-  "corner2direction": "left|right",
-  "corner3direction": "left|right",
-  "totalCorners": <int>
+  "trackName": "{track_name}",
+  "arrow": {{
+    "position": "<where on the map>",
+    "compassDirection": "<N/NE/E/SE/S/SW/W/NW>",
+    "onMainStraight": true
+  }},
+  "cornersFound": [<list of all corner numbers visible>],
+  "corners": [
+    {{
+      "number": <int>,
+      "approachHeading": "<compass direction approaching>",
+      "exitHeading": "<compass direction leaving>",
+      "tightness": "kink|gentle|moderate|sharp|hairpin",
+      "mapPosition": "<top/bottom/left/right/center of circuit>",
+      "description": "<brief geometric description of what the track does here>"
+    }}
+  ],
+  "overallShape": "<describe the circuit shape and where features are>"
 }}"""
 
         if progress_cb:
-            progress_cb(10, "Pass 1: Determining track direction...")
+            progress_cb(8, "Pass 1: Describing track geometry (no L/R judgment)...")
 
         try:
             pass1_response = model.generate_content(
                 [image_part, pass1_prompt],
                 generation_config=genai.GenerationConfig(
                     temperature=0.1,
-                    max_output_tokens=2048,
+                    max_output_tokens=4096,
                     response_mime_type="application/json",
                 )
             )
@@ -765,71 +774,81 @@ Return JSON:
             except json.JSONDecodeError:
                 pass1_result = _repair_json(pass1_response.text)
 
-            track_direction = pass1_result.get('trackDirection', 'unknown')
-            total_corners = pass1_result.get('totalCorners', 0)
-            direction_reasoning = pass1_result.get('directionReasoning', '')
-
+            total_corners = len(pass1_result.get('corners', []))
             if progress_cb:
-                progress_cb(20, f"Pass 1: {track_direction}, {total_corners} corners found")
+                progress_cb(18, f"Pass 1: Described {total_corners} corners geometrically")
 
         except Exception as e:
             if progress_cb:
-                progress_cb(20, f"Pass 1 error: {e}")
+                progress_cb(18, f"Pass 1 error: {e}")
             raise
 
         # ═══════════════════════════════════════════════════════
-        # PASS 2: Full corner analysis using confirmed direction
+        # PASS 2 — PURE REASONING: Compute L/R from headings
+        # (NO image — text only, so no spatial confusion)
         # ═══════════════════════════════════════════════════════
-        pass2_prompt = f"""You are an expert Motorsport Track Engineer. You have already determined
-that this circuit runs **{track_direction.upper()}** with {total_corners} numbered corners.
+        pass1_json = json.dumps(pass1_result, indent=2)
 
-Your earlier analysis found: {direction_reasoning}
+        pass2_prompt = f"""You are a navigation expert. Given COMPASS HEADINGS at each corner
+of a racing circuit, determine the direction of travel and whether each turn is LEFT or RIGHT.
 
-NOW: For EACH corner on the {track_name} circuit map, determine:
+Here is the geometric description of {track_name}:
 
-HOW TO DETERMINE LEFT vs RIGHT:
-You are the DRIVER sitting in the car, driving {track_direction} around the circuit,
-following corners in numerical order (1, 2, 3...).
+{pass1_json}
 
-At each numbered corner, look at how the TRACK RIBBON curves:
-  - If the ribbon curves to the LEFT side of your direction of travel → LEFT turn
-  - If the ribbon curves to the RIGHT side of your direction of travel → RIGHT turn
+RULES FOR DETERMINING LEFT vs RIGHT:
+When you are heading in a direction and the road changes to a new heading:
+- If the heading rotates COUNTER-CLOCKWISE (e.g., North → West, East → North,
+  South → East, West → South), that is a LEFT turn
+- If the heading rotates CLOCKWISE (e.g., North → East, East → South,
+  South → West, West → North), that is a RIGHT turn
 
-CORNER SEVERITY (how tight the curve is):
-  - HAIRPIN: The ribbon almost folds back on itself (nearly 180°)
-  - TIGHT: A sharp bend requiring heavy braking
-  - MEDIUM: A moderate curve
-  - FAST_SWEEPER: A long gentle arc taken at high speed
-  - KINK: The slightest deflection, barely a corner
+COMPASS ROTATION REFERENCE:
+Clockwise order: N → NE → E → SE → S → SW → W → NW → N
+Counter-clockwise: N → NW → W → SW → S → SE → E → NE → N
 
-TRACE EACH CORNER:
-Go through corners 1 to {total_corners} in order. For each one, look at the map
-and determine which way the ribbon curves at that numbered point.
+WORK THROUGH EACH CORNER:
+For each corner, take the approach heading and exit heading.
+Determine which way the heading rotated (CW = right turn, CCW = left turn).
+
+Then determine overall circuit direction:
+- If the car completes the loop by mostly turning LEFT → counter-clockwise circuit
+- If the car completes the loop by mostly turning RIGHT → clockwise circuit
+
+SEVERITY MAPPING:
+- kink → kink
+- gentle → fast_sweeper
+- moderate → medium
+- sharp → tight
+- hairpin → hairpin
 
 Return JSON:
 {{
   "trackName": "{track_name}",
-  "trackDirection": "{track_direction}",
-  "totalCorners": {total_corners},
-  "cornerSummary": "<X left-hand corners, Y right-hand corners>",
-  "directionEvidence": "{direction_reasoning}",
+  "trackDirection": "clockwise|counter-clockwise",
+  "reasoning": "<step by step: for each corner, approach heading → exit heading → rotation direction → left/right>",
   "corners": [
     {{
       "number": <int>,
+      "approachHeading": "<from pass 1>",
+      "exitHeading": "<from pass 1>",
+      "headingRotation": "clockwise|counter-clockwise",
       "direction": "left|right",
       "severity": "hairpin|tight|medium|fast_sweeper|kink",
-      "name": "<only if labelled on map, otherwise empty string>"
+      "name": ""
     }}
   ],
-  "layoutNotes": "<brief description of overall layout shape and personality>"
+  "cornerSummary": "<X left-hand turns, Y right-hand turns>",
+  "layoutNotes": "<brief description>"
 }}"""
 
         if progress_cb:
-            progress_cb(25, f"Pass 2: Analyzing each corner ({track_direction})...")
+            progress_cb(22, "Pass 2: Computing L/R from compass headings (text-only reasoning)...")
 
         try:
+            # TEXT-ONLY call — no image, pure reasoning
             pass2_response = model.generate_content(
-                [image_part, pass2_prompt],
+                pass2_prompt,
                 generation_config=genai.GenerationConfig(
                     temperature=0.1,
                     max_output_tokens=4096,
@@ -842,6 +861,10 @@ Return JSON:
             except json.JSONDecodeError:
                 result = _repair_json(pass2_response.text)
 
+            # Add the direction evidence from pass 1
+            result['directionEvidence'] = result.get('reasoning', '')
+            result['totalCorners'] = len(result.get('corners', []))
+
             if progress_cb:
                 corners = result.get('corners', [])
                 left = sum(1 for c in corners if c.get('direction') == 'left')
@@ -853,7 +876,7 @@ Return JSON:
 
         except Exception as e:
             if progress_cb:
-                progress_cb(40, f"Sweep 1 error: {e}")
+                progress_cb(40, f"Pass 2 error: {e}")
             raise
 
     # ── SWEEP 2: Guide → Enrich Template ──────────────────────
