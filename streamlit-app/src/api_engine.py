@@ -769,12 +769,19 @@ Return JSON:
                 )
             )
 
+            raw_pass1 = pass1_response.text if pass1_response.text else ""
+            print(f"[Sweep1 Pass1] response length={len(raw_pass1)}, first 300 chars: {raw_pass1[:300]}")
+
+            if not raw_pass1.strip():
+                raise ValueError("Pass 1 returned empty response from Gemini")
+
             try:
-                pass1_result = json.loads(pass1_response.text)
+                pass1_result = json.loads(raw_pass1)
             except json.JSONDecodeError:
-                pass1_result = _repair_json(pass1_response.text)
+                pass1_result = _repair_json(raw_pass1)
 
             total_corners = len(pass1_result.get('corners', []))
+            print(f"[Sweep1 Pass1] Found {total_corners} corners: {[c.get('number') for c in pass1_result.get('corners', [])]}")
             if progress_cb:
                 progress_cb(18, f"Pass 1: Described {total_corners} corners geometrically")
 
@@ -845,39 +852,66 @@ Return JSON:
         if progress_cb:
             progress_cb(22, "Pass 2: Computing L/R from compass headings (text-only reasoning)...")
 
-        try:
-            # TEXT-ONLY call — no image, pure reasoning
-            pass2_response = model.generate_content(
-                pass2_prompt,
-                generation_config=genai.GenerationConfig(
-                    temperature=0.1,
-                    max_output_tokens=4096,
-                    response_mime_type="application/json",
-                )
-            )
-
+        # Try up to 2 attempts — first with JSON mode, fallback without
+        last_error = None
+        for attempt in range(2):
             try:
-                result = json.loads(pass2_response.text)
-            except json.JSONDecodeError:
-                result = _repair_json(pass2_response.text)
+                # Attempt 1: with response_mime_type  Attempt 2: without (free-form + extract)
+                if attempt == 0:
+                    pass2_response = model.generate_content(
+                        pass2_prompt,
+                        generation_config=genai.GenerationConfig(
+                            temperature=0.1,
+                            max_output_tokens=4096,
+                            response_mime_type="application/json",
+                        )
+                    )
+                else:
+                    if progress_cb:
+                        progress_cb(25, "Pass 2 retry: free-form reasoning...")
+                    pass2_response = model.generate_content(
+                        pass2_prompt + "\n\nIMPORTANT: Your response must be ONLY valid JSON, nothing else.",
+                        generation_config=genai.GenerationConfig(
+                            temperature=0.1,
+                            max_output_tokens=4096,
+                        )
+                    )
 
-            # Add the direction evidence from pass 1
-            result['directionEvidence'] = result.get('reasoning', '')
-            result['totalCorners'] = len(result.get('corners', []))
+                raw_text = pass2_response.text if pass2_response.text else ""
+                print(f"[Sweep1 Pass2] attempt={attempt+1}, response length={len(raw_text)}, first 200 chars: {raw_text[:200]}")
 
-            if progress_cb:
-                corners = result.get('corners', [])
-                left = sum(1 for c in corners if c.get('direction') == 'left')
-                right = sum(1 for c in corners if c.get('direction') == 'right')
-                direction = result.get('trackDirection', '?')
-                progress_cb(40, f"Sweep 1: {len(corners)} corners ({left}L, {right}R) — {direction}")
+                if not raw_text.strip():
+                    raise json.JSONDecodeError("Empty response from Gemini", "", 0)
 
-            return result
+                try:
+                    result = json.loads(raw_text)
+                except json.JSONDecodeError:
+                    result = _repair_json(raw_text)
 
-        except Exception as e:
-            if progress_cb:
-                progress_cb(40, f"Pass 2 error: {e}")
-            raise
+                # Add the direction evidence from pass 1
+                result['directionEvidence'] = result.get('reasoning', '')
+                result['totalCorners'] = len(result.get('corners', []))
+
+                if progress_cb:
+                    corners = result.get('corners', [])
+                    left = sum(1 for c in corners if c.get('direction') == 'left')
+                    right = sum(1 for c in corners if c.get('direction') == 'right')
+                    direction = result.get('trackDirection', '?')
+                    progress_cb(40, f"Sweep 1: {len(corners)} corners ({left}L, {right}R) — {direction}")
+
+                return result
+
+            except Exception as e:
+                last_error = e
+                print(f"[Sweep1 Pass2] attempt={attempt+1} failed: {e}")
+                if attempt == 0:
+                    time.sleep(1)
+                    continue
+
+        # Both attempts failed
+        if progress_cb:
+            progress_cb(40, f"Pass 2 error: {last_error}")
+        raise last_error
 
     # ── SWEEP 2: Guide → Enrich Template ──────────────────────
 
