@@ -29,7 +29,7 @@ if not gemini_key or not claude_key:
 from src.api_engine import APIEngine
 from src.video_processor import VideoProcessor
 from src.blueprint_pipeline import BlueprintPipeline
-from src.ruapuna_blueprint import is_ruapuna, get_blueprint as get_ruapuna
+from src.ruapuna_blueprint import is_ruapuna, get_blueprint as get_ruapuna, get_track_model as get_ruapuna_track_model
 from src.conditioning_renderer import ConditioningRenderer
 from src.pdf_generator import generate_blueprint_pdf
 
@@ -80,14 +80,17 @@ track_name = st.text_input(
 )
 st.session_state['track_name'] = track_name
 
-# Check for Ruapuna pre-built blueprint (shortcut)
+# Check for Ruapuna pre-built data (bypass unreliable AI research)
 if track_name and is_ruapuna(track_name):
-    st.success("🎯 Ruapuna detected! Pre-built QE blueprint available.")
-    if st.button("Load Ruapuna Blueprint", type="primary"):
+    # Auto-load verified track model if not already loaded
+    if not st.session_state.get('track_model'):
+        st.session_state['track_model'] = get_ruapuna_track_model()
+
+    st.success("🎯 Ruapuna detected! Verified 11-corner track model loaded (7 left, 4 right).")
+    if st.button("Load Full Ruapuna QE Blueprint", type="primary"):
         ruapuna = get_ruapuna()
         st.session_state['blueprint'] = ruapuna
         st.session_state['corners'] = ruapuna.get('sections', [])
-        st.session_state['track_model'] = {'trackName': track_name, 'prebuilt': True}
         st.rerun()
 
 # Track Map and Track Guide uploads
