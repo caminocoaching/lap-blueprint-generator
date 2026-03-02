@@ -690,104 +690,129 @@ Return JSON:
         if progress_cb:
             progress_cb(10, "Sweep 1: Reading track map with Gemini...")
 
-        model = genai.GenerativeModel(self.gemini_model)
+        # Use Pro model for map reading — spatial reasoning needs the best model
+        # Video analysis can use Flash for speed, but map reading is one-shot accuracy
+        map_model_name = 'gemini-2.5-pro'
+        model = genai.GenerativeModel(map_model_name)
 
-        prompt = f"""ROLE: You are an expert Motorsport Performance Analyst and Track Engineer.
+        # Build image part (reused in both passes)
+        image_part = {
+            "inline_data": {
+                "mime_type": "image/jpeg",
+                "data": image_b64
+            }
+        }
 
-OBJECTIVE: Analyze this image of the {track_name} racing circuit layout and
-deconstruct its technical characteristics with the precision of a race engineer.
+        # ═══════════════════════════════════════════════════════
+        # PASS 1: Determine direction and count corners
+        # ═══════════════════════════════════════════════════════
+        pass1_prompt = f"""You are an expert Motorsport Track Engineer analyzing a circuit map.
 
-═══════════════════════════════════════════════════════════
-CONTEXTUAL DEFINITIONS — WHAT YOU ARE LOOKING AT:
-═══════════════════════════════════════════════════════════
+WHAT YOU ARE LOOKING AT:
+This image shows a racing circuit — a continuous tarmac loop. The dark ribbon
+is the racing surface.
 
-THE RIBBON: The track is a continuous tarmac loop — a closed circuit. The dark
-ribbon on the image IS the racing surface. Everything outside it is run-off,
-grass, gravel, or barriers.
+YOUR TASK — Answer these questions about the {track_name} circuit:
 
-START/FINISH: Look for a line crossing the track (often coloured — green, red,
-or white). If there's an arrow near this line, it shows the DIRECTION OF TRAVEL.
-Cars cross this line to begin and end each lap.
+1. FIND THE DIRECTION ARROW on the map. Where is it? What direction does it point?
+   The arrow shows which way cars DRIVE around the circuit.
 
-DIRECTION OF TRAVEL: If there is an arrow on the map, it points IN THE DIRECTION
-the cars drive. Follow it. If the arrow points RIGHT from the start line, the
-first corner is to the RIGHT of the start line. The corners must be driven in
-NUMERICAL ORDER (Turn 1, Turn 2, Turn 3...) following this direction.
+2. FIND THE NUMBERED CORNERS. The corners are numbered in blue circles.
+   List the numbers you can see (e.g., 1, 2, 3... 11).
 
-PIT LANE: A parallel strip running alongside the main straight. Cars EXIT pits
-in the same direction as the racing direction. Pit lane is NOT a corner.
+3. Starting from the arrow, the cars drive toward Corner 1, then Corner 2,
+   then Corner 3, and so on in numerical order.
+   Following this sequence around the full circuit — does the overall flow
+   go CLOCKWISE or COUNTER-CLOCKWISE around the loop?
 
-CORNER ANATOMY: Every numbered turn has:
-  - A BRAKING ZONE: The approach where the car slows down
-  - An APEX: The innermost point of the turn (closest to inside kerb)
-  - An EXIT: Where the car straightens and accelerates toward the next section
+4. TRACE CORNERS 1, 2, and 3 specifically:
+   - From the start/finish straight, the car drives toward Corner 1.
+   - At Corner 1, does the TRACK RIBBON curve to the LEFT or RIGHT?
+   - At Corner 2, does the TRACK RIBBON curve to the LEFT or RIGHT?
+   - At Corner 3, does the TRACK RIBBON curve to the LEFT or RIGHT?
 
-CORNER TYPES:
-  - HAIRPIN: Very tight, nearly 180° reversal of direction (very slow speed)
-  - TIGHT: Sharp corner requiring heavy braking (slow speed)
-  - MEDIUM: Moderate corner, moderate braking (medium speed)
-  - FAST SWEEPER: Long, flowing curve at high speed (light or no braking)
-  - KINK: Barely a corner — slight change of direction at near full speed
+IMPORTANT: LEFT/RIGHT is determined by the DIRECTION THE TRACK CURVES on the map
+as you follow the numbered sequence. If the ribbon bends leftward going from
+Corner N toward Corner N+1, that is a LEFT turn.
 
-═══════════════════════════════════════════════════════════
-YOUR TASK — SYSTEMATIC ANALYSIS:
-═══════════════════════════════════════════════════════════
+Return JSON:
+{{
+  "arrowLocation": "<where on the map the arrow is and which direction it points>",
+  "cornersFound": [<list of corner numbers visible on map>],
+  "trackDirection": "clockwise|counter-clockwise",
+  "directionReasoning": "<explain step by step how you determined CW or CCW>",
+  "corner1direction": "left|right",
+  "corner2direction": "left|right",
+  "corner3direction": "left|right",
+  "totalCorners": <int>
+}}"""
 
-STEP 1 — FIND THE START/FINISH LINE AND DIRECTION ARROW:
-  - Locate the start/finish line on the map
-  - Find the direction arrow — it tells you which way cars travel
-  - Determine: is the overall circuit flow CLOCKWISE or COUNTER-CLOCKWISE?
+        if progress_cb:
+            progress_cb(10, "Pass 1: Determining track direction...")
 
-STEP 2 — TRACE THE RIBBON:
-  Starting from the start/finish line, follow the tarmac ribbon in the direction
-  of the arrow. Mentally DRIVE the circuit. You are sitting in the car, steering.
-  At every point where you must turn the steering wheel, that is a CORNER.
+        try:
+            pass1_response = model.generate_content(
+                [image_part, pass1_prompt],
+                generation_config=genai.GenerationConfig(
+                    temperature=0.1,
+                    max_output_tokens=2048,
+                    response_mime_type="application/json",
+                )
+            )
 
-  For each corner ask yourself:
-  - Am I turning the wheel LEFT or RIGHT? (from the DRIVER's perspective,
-    sitting in the car, looking forward through the windscreen)
-  - How FAR am I turning it? (hairpin/tight/medium/fast_sweeper/kink)
+            try:
+                pass1_result = json.loads(pass1_response.text)
+            except json.JSONDecodeError:
+                pass1_result = _repair_json(pass1_response.text)
 
-STEP 3 — NUMBER THE CORNERS:
-  Number each corner sequentially: Turn 1, Turn 2, Turn 3... in the order the
-  driver encounters them following the racing direction.
+            track_direction = pass1_result.get('trackDirection', 'unknown')
+            total_corners = pass1_result.get('totalCorners', 0)
+            direction_reasoning = pass1_result.get('directionReasoning', '')
 
-  If corners are already numbered on the map, use those numbers.
-  If corners are named on the map, include those names.
+            if progress_cb:
+                progress_cb(20, f"Pass 1: {track_direction}, {total_corners} corners found")
 
-═══════════════════════════════════════════════════════════
-CRITICAL RULES:
-═══════════════════════════════════════════════════════════
+        except Exception as e:
+            if progress_cb:
+                progress_cb(20, f"Pass 1 error: {e}")
+            raise
 
-  - Every distinct change of steering direction = a separate corner
-  - A chicane = 2 corners (left-right or right-left)
-  - A long sweeper that curves ONE way = 1 corner
-  - A kink counts as a corner (fast, but still a direction change)
-  - LEFT means the driver turns the wheel LEFT (car goes left)
-  - RIGHT means the driver turns the wheel RIGHT (car goes right)
-  - Do NOT include pit lane entry/exit as corners
-  - Do NOT guess corner names — only use names visible on the map
-  - Do NOT invent visual references you cannot see
+        # ═══════════════════════════════════════════════════════
+        # PASS 2: Full corner analysis using confirmed direction
+        # ═══════════════════════════════════════════════════════
+        pass2_prompt = f"""You are an expert Motorsport Track Engineer. You have already determined
+that this circuit runs **{track_direction.upper()}** with {total_corners} numbered corners.
 
-═══════════════════════════════════════════════════════════
-SELF-CHECK BEFORE ANSWERING:
-═══════════════════════════════════════════════════════════
+Your earlier analysis found: {direction_reasoning}
 
-Before returning your answer, verify:
-  1. Did you follow the direction arrow from the start line?
-  2. Are the corners numbered in the order the DRIVER encounters them?
-  3. For each corner, did you determine left/right from the DRIVER's perspective
-     (sitting in the car, looking forward)?
-  4. Does your left/right count make sense for the overall shape of the circuit?
-     (e.g., a counter-clockwise circuit will have MORE left turns than right turns)
+NOW: For EACH corner on the {track_name} circuit map, determine:
+
+HOW TO DETERMINE LEFT vs RIGHT:
+You are the DRIVER sitting in the car, driving {track_direction} around the circuit,
+following corners in numerical order (1, 2, 3...).
+
+At each numbered corner, look at how the TRACK RIBBON curves:
+  - If the ribbon curves to the LEFT side of your direction of travel → LEFT turn
+  - If the ribbon curves to the RIGHT side of your direction of travel → RIGHT turn
+
+CORNER SEVERITY (how tight the curve is):
+  - HAIRPIN: The ribbon almost folds back on itself (nearly 180°)
+  - TIGHT: A sharp bend requiring heavy braking
+  - MEDIUM: A moderate curve
+  - FAST_SWEEPER: A long gentle arc taken at high speed
+  - KINK: The slightest deflection, barely a corner
+
+TRACE EACH CORNER:
+Go through corners 1 to {total_corners} in order. For each one, look at the map
+and determine which way the ribbon curves at that numbered point.
 
 Return JSON:
 {{
   "trackName": "{track_name}",
-  "trackDirection": "clockwise|counter-clockwise",
-  "totalCorners": <int>,
+  "trackDirection": "{track_direction}",
+  "totalCorners": {total_corners},
   "cornerSummary": "<X left-hand corners, Y right-hand corners>",
-  "directionEvidence": "<what told you the direction: arrow location, pit lane, numbering>",
+  "directionEvidence": "{direction_reasoning}",
   "corners": [
     {{
       "number": <int>,
@@ -799,20 +824,12 @@ Return JSON:
   "layoutNotes": "<brief description of overall layout shape and personality>"
 }}"""
 
-        # Build content parts: image + prompt
-        parts = [
-            {
-                "inline_data": {
-                    "mime_type": "image/jpeg",
-                    "data": image_b64
-                }
-            },
-            prompt
-        ]
+        if progress_cb:
+            progress_cb(25, f"Pass 2: Analyzing each corner ({track_direction})...")
 
         try:
-            response = model.generate_content(
-                parts,
+            pass2_response = model.generate_content(
+                [image_part, pass2_prompt],
                 generation_config=genai.GenerationConfig(
                     temperature=0.1,
                     max_output_tokens=4096,
@@ -821,9 +838,9 @@ Return JSON:
             )
 
             try:
-                result = json.loads(response.text)
+                result = json.loads(pass2_response.text)
             except json.JSONDecodeError:
-                result = _repair_json(response.text)
+                result = _repair_json(pass2_response.text)
 
             if progress_cb:
                 corners = result.get('corners', [])
