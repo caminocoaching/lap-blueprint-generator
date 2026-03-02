@@ -72,10 +72,7 @@ def save_track(track_model):
         'action': 'save',
         'cornerCount': len(data.get('corners', [])),
     })
-    data['_history'] = history[-20]  # Keep last 20 entries
-
-    # Actually that should be a slice
-    data['_history'] = history[-20:]
+    data['_history'] = history[-20:]  # Keep last 20 entries
 
     with open(path, 'w') as f:
         json.dump(data, f, indent=2, default=str)
