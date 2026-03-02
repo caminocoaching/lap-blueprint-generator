@@ -670,30 +670,76 @@ Return JSON:
 
     # ── SWEEP 1: Track Map → Template ────────────────────────
 
+    @staticmethod
+    def _cross_product_turn(before_x, before_y, apex_x, apex_y, after_x, after_y):
+        """
+        Compute turn direction from 3 pixel coordinates using cross product.
+        In image coordinates (Y increases downward):
+        - Positive cross product = RIGHT turn
+        - Negative cross product = LEFT turn
+
+        Returns: ('left' or 'right', magnitude for severity estimation)
+        """
+        # Vector from before→apex
+        v1x = apex_x - before_x
+        v1y = apex_y - before_y
+        # Vector from apex→after
+        v2x = after_x - apex_x
+        v2y = after_y - apex_y
+        # Cross product (z-component)
+        cross = v1x * v2y - v1y * v2x
+        # In image coords (Y-down), positive cross = clockwise turn = RIGHT
+        # Negative cross = counter-clockwise turn = LEFT
+        if cross > 0:
+            return 'right', abs(cross)
+        elif cross < 0:
+            return 'left', abs(cross)
+        else:
+            return 'straight', 0
+
+    @staticmethod
+    def _estimate_severity(magnitude, v1_len, v2_len):
+        """Estimate corner severity from cross product magnitude and vector lengths."""
+        import math
+        if v1_len == 0 or v2_len == 0:
+            return 'medium'
+        # Normalized curvature (sin of angle between vectors)
+        sin_angle = magnitude / (v1_len * v2_len) if (v1_len * v2_len) > 0 else 0
+        if sin_angle > 0.85:
+            return 'hairpin'
+        elif sin_angle > 0.6:
+            return 'tight'
+        elif sin_angle > 0.3:
+            return 'medium'
+        elif sin_angle > 0.1:
+            return 'fast_sweeper'
+        else:
+            return 'kink'
+
     def extract_track_template(self, image_b64, track_name, progress_cb=None):
         """
-        SWEEP 1: Extract the track TEMPLATE from a map image using Gemini.
+        SWEEP 1: Extract the track TEMPLATE from a map image.
 
-        Uses a 3-pass approach that SEPARATES vision from spatial reasoning:
-          Pass 1 (VISION): Describe what you see — compass headings at each corner
-          Pass 2 (REASONING, no image): Compute L/R from heading changes + direction
-          Pass 3 (VISION): Confirm severity of each corner by looking at the map again
+        Uses a 2-pass approach — ZERO AI spatial reasoning:
+          Pass 1 (VISION — Gemini): Locate pixel coordinates of each corner
+              (entry point, apex, exit point). This is PURE DESCRIPTION.
+          Pass 2 (MATH — Python): Cross-product of vectors to compute L/R.
+              No AI involved — deterministic vector math.
 
-        This works because AI models score 10/10 on DESCRIBING images but fail
-        at SPATIAL REASONING about left/right. By separating the two tasks,
-        we get accurate results from both.
+        Why this works: AI models score 10/10 on locating objects in images
+        but fail at reasoning about left/right. Pixel coordinate identification
+        is a description task. L/R is computed by math, not by AI.
         """
         if not self.gemini_key:
             raise ValueError("Gemini API key not configured — required for track map reading")
 
         if progress_cb:
-            progress_cb(5, "Sweep 1: Reading track map with Gemini Pro (3-pass)...")
+            progress_cb(5, "Sweep 1: Reading track map with Gemini Pro...")
 
-        # Use Pro model for map reading — spatial reasoning needs the best model
+        # Use Pro model for map reading
         map_model_name = 'gemini-2.5-pro'
         model = genai.GenerativeModel(map_model_name)
 
-        # Build image part (reused in vision passes)
         image_part = {
             "inline_data": {
                 "mime_type": "image/jpeg",
@@ -702,62 +748,68 @@ Return JSON:
         }
 
         # ═══════════════════════════════════════════════════════
-        # PASS 1 — PURE VISION: Describe geometry, no L/R judgment
+        # PASS 1 — PURE VISION: Pixel coordinates at each corner
         # ═══════════════════════════════════════════════════════
-        # Key insight: AI describes images perfectly (10/10) but reasons
-        # about L/R incorrectly. So we ask ONLY for descriptions here.
-        pass1_prompt = f"""You are analyzing a circuit map image of {track_name}.
+        # We ask Gemini ONLY to locate things in the image — no reasoning.
+        pass1_prompt = f"""You are analyzing a racing circuit map image of {track_name}.
 
-YOUR TASK: DESCRIBE what you see. Do NOT judge left or right — just describe geometry.
+YOUR TASK: Locate the PIXEL COORDINATES of key points on the track.
+Do NOT determine left/right or clockwise/counter-clockwise. Just locate points.
 
-1. ARROW: Find the direction arrow on the map. Describe:
-   - Where on the map is the arrow?
-   - What COMPASS direction does the arrow point? (N, NE, E, SE, S, SW, W, NW)
-   - Is the arrow on the main straight?
+IMAGINE the image has coordinates where (0,0) is the TOP-LEFT corner.
+X increases going RIGHT. Y increases going DOWN.
 
-2. NUMBERED CORNERS: Find all numbered corners (in circles on the map).
-   List every number you can see.
+1. DIRECTION ARROW: Find the arrow on the map that shows which way cars drive.
+   Report its approximate pixel position and which direction it points
+   (describe as a vector: e.g., "points toward increasing X" or "points toward decreasing Y").
 
-3. For EACH numbered corner, describe the GEOMETRY of the track AT that point.
-   DO NOT say "left" or "right". Instead, describe:
-   - What COMPASS direction is the track heading APPROACHING this corner?
-     (e.g., "heading North", "heading Southeast")
-   - What COMPASS direction is the track heading LEAVING this corner?
-     (e.g., "heading West", "heading Northwest")
-   - How TIGHT is the curve? (barely deflects / gentle arc / moderate bend /
-     sharp bend / hairpin — almost reverses direction)
-   - POSITION on the map: is this corner at the top/bottom/left/right of the circuit?
+2. For EACH numbered corner on the map, report THREE pixel coordinate points:
+   a) BEFORE: A point on the track about 1-2cm BEFORE the corner (approaching it
+      in the driving direction shown by the arrow)
+   b) APEX: The point AT the numbered corner marker (the tightest point of the curve)
+   c) AFTER: A point on the track about 1-2cm AFTER the corner (leaving it
+      in the driving direction)
 
-4. OVERALL SHAPE: Describe the overall shape of the circuit.
-   Where is the main straight? Where does the circuit go from there?
+   Think of it as: if a car is driving in the arrow's direction, where is it
+   JUST BEFORE this corner, AT this corner, and JUST AFTER this corner?
 
-CRITICAL: Do NOT use the words "left" or "right" for turn direction.
-Only use compass directions and geometric descriptions.
+3. Also report how TIGHT each curve looks:
+   - kink (barely bends)
+   - gentle (slight curve)
+   - moderate (clear bend)
+   - sharp (tight bend)
+   - hairpin (almost reverses direction)
+
+IMPORTANT:
+- Report coordinates as approximate pixel values (e.g., x:450, y:200)
+- The BEFORE point must be UPSTREAM of the corner in the driving direction
+- The AFTER point must be DOWNSTREAM of the corner in the driving direction
+- Follow the arrow direction to determine upstream/downstream
 
 Return JSON:
 {{
   "trackName": "{track_name}",
+  "imageSize": {{"width": <estimated_px>, "height": <estimated_px>}},
   "arrow": {{
-    "position": "<where on the map>",
-    "compassDirection": "<N/NE/E/SE/S/SW/W/NW>",
-    "onMainStraight": true
+    "x": <pixel_x>,
+    "y": <pixel_y>,
+    "pointsToward": "<describe direction as increasing/decreasing X and Y>"
   }},
-  "cornersFound": [<list of all corner numbers visible>],
+  "cornersFound": [<list of corner numbers visible>],
   "corners": [
     {{
       "number": <int>,
-      "approachHeading": "<compass direction approaching>",
-      "exitHeading": "<compass direction leaving>",
+      "before": {{"x": <int>, "y": <int>}},
+      "apex": {{"x": <int>, "y": <int>}},
+      "after": {{"x": <int>, "y": <int>}},
       "tightness": "kink|gentle|moderate|sharp|hairpin",
-      "mapPosition": "<top/bottom/left/right/center of circuit>",
-      "description": "<brief geometric description of what the track does here>"
+      "name": "<only if labelled on map>"
     }}
-  ],
-  "overallShape": "<describe the circuit shape and where features are>"
+  ]
 }}"""
 
         if progress_cb:
-            progress_cb(8, "Pass 1: Describing track geometry (no L/R judgment)...")
+            progress_cb(8, "Pass 1: Gemini locating pixel coordinates of each corner...")
 
         try:
             pass1_response = model.generate_content(
@@ -770,7 +822,7 @@ Return JSON:
             )
 
             raw_pass1 = pass1_response.text if pass1_response.text else ""
-            print(f"[Sweep1 Pass1] response length={len(raw_pass1)}, first 300 chars: {raw_pass1[:300]}")
+            print(f"[Sweep1 Pass1] response length={len(raw_pass1)}")
 
             if not raw_pass1.strip():
                 raise ValueError("Pass 1 returned empty response from Gemini")
@@ -780,125 +832,113 @@ Return JSON:
             except json.JSONDecodeError:
                 pass1_result = _repair_json(raw_pass1)
 
-            total_corners = len(pass1_result.get('corners', []))
-            print(f"[Sweep1 Pass1] Found {total_corners} corners: {[c.get('number') for c in pass1_result.get('corners', [])]}")
+            corners_raw = pass1_result.get('corners', [])
+            print(f"[Sweep1 Pass1] Found {len(corners_raw)} corners with pixel coords")
+            for c in corners_raw:
+                b = c.get('before', {})
+                a = c.get('apex', {})
+                af = c.get('after', {})
+                print(f"  Corner {c.get('number')}: before=({b.get('x')},{b.get('y')}) "
+                      f"apex=({a.get('x')},{a.get('y')}) after=({af.get('x')},{af.get('y')}) "
+                      f"tightness={c.get('tightness')}")
+
             if progress_cb:
-                progress_cb(18, f"Pass 1: Described {total_corners} corners geometrically")
+                progress_cb(25, f"Pass 1: Located {len(corners_raw)} corners. Computing directions...")
 
         except Exception as e:
             if progress_cb:
-                progress_cb(18, f"Pass 1 error: {e}")
+                progress_cb(25, f"Pass 1 error: {e}")
             raise
 
         # ═══════════════════════════════════════════════════════
-        # PASS 2 — PURE REASONING via CLAUDE: Compute L/R from headings
-        # Gemini does vision (10/10), Claude does reasoning (reliable JSON)
+        # PASS 2 — PURE PYTHON MATH: Cross product → L/R direction
+        # No AI involved. Deterministic. Cannot hallucinate.
         # ═══════════════════════════════════════════════════════
-        if not self.claude_client:
-            raise ValueError("Claude API key required for Pass 2 reasoning")
+        import math
 
-        pass1_json = json.dumps(pass1_result, indent=2)
+        computed_corners = []
+        left_count = 0
+        right_count = 0
 
-        pass2_system = """You are a navigation expert who computes turn directions from compass headings.
-You will receive geometric descriptions of a racing circuit's corners (compass headings
-approaching and leaving each corner). Your job is to determine whether each turn is
-LEFT or RIGHT using pure compass rotation logic.
+        for c in corners_raw:
+            b = c.get('before', {})
+            a = c.get('apex', {})
+            af = c.get('after', {})
 
-Return ONLY valid JSON. No markdown, no code blocks, no explanation outside the JSON."""
+            bx, by = b.get('x', 0), b.get('y', 0)
+            ax, ay = a.get('x', 0), a.get('y', 0)
+            afx, afy = af.get('x', 0), af.get('y', 0)
 
-        pass2_user = f"""Here is the geometric description of {track_name} from visual analysis:
+            direction, magnitude = self._cross_product_turn(bx, by, ax, ay, afx, afy)
 
-{pass1_json}
+            # Vector lengths for severity estimation
+            v1_len = math.sqrt((ax - bx) ** 2 + (ay - by) ** 2)
+            v2_len = math.sqrt((afx - ax) ** 2 + (afy - ay) ** 2)
+            severity = self._estimate_severity(magnitude, v1_len, v2_len)
 
-RULES FOR DETERMINING LEFT vs RIGHT:
-When heading in a direction and the road changes to a new heading:
-- If the heading rotates COUNTER-CLOCKWISE (e.g., North → West, East → North,
-  South → East, West → South), that is a LEFT turn
-- If the heading rotates CLOCKWISE (e.g., North → East, East → South,
-  South → West, West → North), that is a RIGHT turn
+            # Use AI's tightness as fallback/override for severity
+            ai_tightness = c.get('tightness', '')
+            severity_map = {
+                'kink': 'kink', 'gentle': 'fast_sweeper', 'moderate': 'medium',
+                'sharp': 'tight', 'hairpin': 'hairpin'
+            }
+            if ai_tightness in severity_map:
+                severity = severity_map[ai_tightness]
 
-COMPASS ROTATION REFERENCE:
-Clockwise order: N → NE → E → SE → S → SW → W → NW → N
-Counter-clockwise: N → NW → W → SW → S → SE → E → NE → N
+            if direction == 'left':
+                left_count += 1
+            elif direction == 'right':
+                right_count += 1
 
-WORK THROUGH EACH CORNER step by step:
-For each corner, take the approach heading and exit heading.
-Determine which way the heading rotated (CW = right turn, CCW = left turn).
+            computed_corners.append({
+                'number': c.get('number', 0),
+                'direction': direction,
+                'severity': severity,
+                'name': c.get('name', ''),
+                'pixelCoords': {
+                    'before': {'x': bx, 'y': by},
+                    'apex': {'x': ax, 'y': ay},
+                    'after': {'x': afx, 'y': afy}
+                },
+                'crossProduct': magnitude
+            })
 
-Then determine overall circuit direction:
-- If the car completes the loop by mostly turning LEFT → counter-clockwise circuit
-- If the car completes the loop by mostly turning RIGHT → clockwise circuit
+            print(f"  Corner {c.get('number')}: cross={magnitude:.0f} → {direction} {severity}")
 
-SEVERITY MAPPING:
-- kink → kink
-- gentle → fast_sweeper
-- moderate → medium
-- sharp → tight
-- hairpin → hairpin
+        # Determine overall circuit direction from majority of turns
+        if left_count > right_count:
+            track_direction = 'counter-clockwise'
+        else:
+            track_direction = 'clockwise'
 
-Return JSON:
-{{
-  "trackName": "{track_name}",
-  "trackDirection": "clockwise|counter-clockwise",
-  "reasoning": "<step by step: for each corner, approach heading → exit heading → rotation direction → left/right>",
-  "corners": [
-    {{
-      "number": <int>,
-      "approachHeading": "<from pass 1>",
-      "exitHeading": "<from pass 1>",
-      "headingRotation": "clockwise|counter-clockwise",
-      "direction": "left|right",
-      "severity": "hairpin|tight|medium|fast_sweeper|kink",
-      "name": ""
-    }}
-  ],
-  "cornerSummary": "<X left-hand turns, Y right-hand turns>",
-  "layoutNotes": "<brief description>"
-}}"""
-
-        if progress_cb:
-            progress_cb(22, "Pass 2: Claude computing L/R from compass headings...")
-
-        try:
-            pass2_response = self.claude_client.messages.create(
-                model=self.claude_model,
-                max_tokens=4096,
-                temperature=0,
-                system=pass2_system,
-                messages=[{"role": "user", "content": pass2_user}]
+        reasoning_parts = []
+        for cc in computed_corners:
+            p = cc['pixelCoords']
+            reasoning_parts.append(
+                f"Corner {cc['number']}: before({p['before']['x']},{p['before']['y']}) → "
+                f"apex({p['apex']['x']},{p['apex']['y']}) → after({p['after']['x']},{p['after']['y']}) "
+                f"= cross product {'positive' if cc['direction'] == 'right' else 'negative'} → "
+                f"{cc['direction'].upper()}"
             )
 
-            raw_text = pass2_response.content[0].text.strip()
-            print(f"[Sweep1 Pass2 Claude] response length={len(raw_text)}, first 300 chars: {raw_text[:300]}")
+        result = {
+            'trackName': track_name,
+            'trackDirection': track_direction,
+            'totalCorners': len(computed_corners),
+            'cornerSummary': f"{left_count} left-hand corners, {right_count} right-hand corners",
+            'directionEvidence': '; '.join(reasoning_parts),
+            'corners': computed_corners,
+            'layoutNotes': f"{track_name}: {len(computed_corners)} corners, "
+                          f"{left_count}L/{right_count}R, {track_direction}. "
+                          f"Directions computed by cross-product vector math from pixel coordinates."
+        }
 
-            # Strip markdown code blocks if present
-            if raw_text.startswith('```'):
-                lines = raw_text.split('\n')
-                raw_text = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+        if progress_cb:
+            progress_cb(40, f"Sweep 1: {len(computed_corners)} corners "
+                           f"({left_count}L, {right_count}R) — {track_direction}")
 
-            try:
-                result = json.loads(raw_text)
-            except json.JSONDecodeError:
-                result = _repair_json(raw_text)
-
-            # Add the direction evidence from pass 1
-            result['directionEvidence'] = result.get('reasoning', '')
-            result['totalCorners'] = len(result.get('corners', []))
-
-            if progress_cb:
-                corners = result.get('corners', [])
-                left = sum(1 for c in corners if c.get('direction') == 'left')
-                right = sum(1 for c in corners if c.get('direction') == 'right')
-                direction = result.get('trackDirection', '?')
-                progress_cb(40, f"Sweep 1: {len(corners)} corners ({left}L, {right}R) — {direction}")
-
-            return result
-
-        except Exception as e:
-            if progress_cb:
-                progress_cb(40, f"Pass 2 error: {e}")
-            print(f"[Sweep1 Pass2 Claude] error: {e}")
-            raise
+        print(f"[Sweep1] FINAL: {left_count}L, {right_count}R, {track_direction}")
+        return result
 
     # ── SWEEP 2: Guide → Enrich Template ──────────────────────
 
