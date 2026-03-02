@@ -1,0 +1,251 @@
+{
+  "trackName": "Ruapuna Park (Mike Pero Motorsport Park)",
+  "trackLength": "3.33 km",
+  "trackDirection": "counter-clockwise",
+  "country": "New Zealand",
+  "trackCharacteristics": "Counter-clockwise 3.33 km circuit in Christchurch. 11 corners: 7 left, 4 right. Mix of hairpins, kinks, and sweepers. Technical back section with tight direction changes.",
+  "notableFeatures": [
+    "Counter-clockwise direction",
+    "7 left-hand corners, 4 right-hand corners",
+    "Two hairpins (T4 left, T8 right)",
+    "Fast kinks at T1 and T5",
+    "Sweeping left at T7",
+    "Long right hairpin at T8",
+    "Final hairpin left onto pit straight"
+  ],
+  "corners": [
+    {
+      "number": 1,
+      "name": "Turn 1 \u2013 Pit Straight End",
+      "direction": "left",
+      "severity": "kink",
+      "visual_targets": {
+        "braking": "Lift point marker on right",
+        "apex": "Left kink kerb",
+        "exit": "Track straightening past kink"
+      },
+      "geometry": {
+        "radius_estimate": "open",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [],
+      "racingLineNotes": "Flat-out kink, slight lift. Stay left of centre on entry.",
+      "notes": "Fast left kink at the end of the pit straight. Minimal steering input needed."
+    },
+    {
+      "number": 2,
+      "name": "Turn 2 \u2013 Open Left",
+      "direction": "left",
+      "severity": "medium",
+      "visual_targets": {
+        "braking": "Brake board left side",
+        "apex": "Left inside kerb",
+        "exit": "Right exit kerb"
+      },
+      "geometry": {
+        "radius_estimate": "open",
+        "elevation": "flat",
+        "camber": "positive"
+      },
+      "hazards_visible": [
+        "Grass run-off on outside"
+      ],
+      "racingLineNotes": "Open radius left, good vision through. Can carry speed.",
+      "notes": "Open left-hander, reasonably fast. Good visibility to exit."
+    },
+    {
+      "number": 3,
+      "name": "Turn 3 \u2013 Left",
+      "direction": "left",
+      "severity": "medium",
+      "visual_targets": {
+        "braking": "Brake reference approaching left kerb",
+        "apex": "Left inside kerb paint",
+        "exit": "Exit kerb, track opening right"
+      },
+      "geometry": {
+        "radius_estimate": "medium",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [],
+      "racingLineNotes": "Medium left, sets up approach to the hairpin.",
+      "notes": "Left corner leading into the hairpin approach."
+    },
+    {
+      "number": 4,
+      "name": "Turn 4 \u2013 Left Hairpin",
+      "direction": "left",
+      "severity": "hairpin",
+      "visual_targets": {
+        "braking": "Brake board on right",
+        "apex": "Inside left kerb at tightest point",
+        "exit": "Track opening to back section"
+      },
+      "geometry": {
+        "radius_estimate": "tight",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [
+        "Gravel trap on outside"
+      ],
+      "racingLineNotes": "Heavy braking. Late apex to maximise exit speed onto the back section.",
+      "notes": "Slowest left-hand corner on the circuit. Critical to get exit right."
+    },
+    {
+      "number": 5,
+      "name": "Turn 5 \u2013 Kink Right",
+      "direction": "right",
+      "severity": "kink",
+      "visual_targets": {
+        "braking": "Lift point reference on left",
+        "apex": "Right side kerb/edge",
+        "exit": "Track straightening ahead"
+      },
+      "geometry": {
+        "radius_estimate": "open",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [],
+      "racingLineNotes": "Fast right kink, minimal input needed. Keep momentum.",
+      "notes": "Quick right kink on the back section. Flat-out or near flat-out."
+    },
+    {
+      "number": 6,
+      "name": "Turn 6 \u2013 Tight Right",
+      "direction": "right",
+      "severity": "tight",
+      "visual_targets": {
+        "braking": "Brake board on left",
+        "apex": "Right inside kerb",
+        "exit": "Left exit kerb"
+      },
+      "geometry": {
+        "radius_estimate": "tight",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [
+        "Barrier proximity on outside"
+      ],
+      "racingLineNotes": "Hard braking into tight right. Good exit matters for the run to T7.",
+      "notes": "Tight right-hander requiring strong braking."
+    },
+    {
+      "number": 7,
+      "name": "Turn 7 \u2013 Sweeping Left",
+      "direction": "left",
+      "severity": "fast_sweeper",
+      "visual_targets": {
+        "braking": "Entry kerb reference",
+        "apex": "Long left inside kerb midpoint",
+        "exit": "Exit kerb, track opening right"
+      },
+      "geometry": {
+        "radius_estimate": "open",
+        "elevation": "flat",
+        "camber": "positive"
+      },
+      "hazards_visible": [
+        "Grass run-off outside"
+      ],
+      "racingLineNotes": "Sweeping left, need to commit. Long arc \u2014 don't pinch the exit.",
+      "notes": "Fast sweeping left, requires commitment and smooth steering."
+    },
+    {
+      "number": 8,
+      "name": "Turn 8 \u2013 Long Right Hairpin",
+      "direction": "right",
+      "severity": "hairpin",
+      "visual_targets": {
+        "braking": "Brake board on left",
+        "apex": "Right inside kerb at tightest point",
+        "exit": "Track opening to the left"
+      },
+      "geometry": {
+        "radius_estimate": "tight",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [
+        "Gravel trap on outside"
+      ],
+      "racingLineNotes": "Long right hairpin \u2014 late apex, patience through the slow section.",
+      "notes": "Long right-hand hairpin. Slowest part of the back section."
+    },
+    {
+      "number": 9,
+      "name": "Turn 9 \u2013 Tight Right",
+      "direction": "right",
+      "severity": "tight",
+      "visual_targets": {
+        "braking": "Brake reference on left",
+        "apex": "Right inside kerb",
+        "exit": "Exit kerb opening left"
+      },
+      "geometry": {
+        "radius_estimate": "tight",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [],
+      "racingLineNotes": "Tight right, sets up approach to T10.",
+      "notes": "Tight right-hander in the complex before the final corner."
+    },
+    {
+      "number": 10,
+      "name": "Turn 10 \u2013 Tight Left",
+      "direction": "left",
+      "severity": "tight",
+      "visual_targets": {
+        "braking": "Brake reference on right",
+        "apex": "Left inside kerb",
+        "exit": "Exit kerb, short straight to final corner"
+      },
+      "geometry": {
+        "radius_estimate": "tight",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [],
+      "racingLineNotes": "Tight left, needs a good exit to carry speed to the final hairpin.",
+      "notes": "Tight left before the final corner. Exit speed is critical."
+    },
+    {
+      "number": 11,
+      "name": "Turn 11 \u2013 Final Hairpin Left",
+      "direction": "left",
+      "severity": "hairpin",
+      "visual_targets": {
+        "braking": "Final brake board on right",
+        "apex": "Left inside kerb at tightest point",
+        "exit": "Pit straight opening ahead"
+      },
+      "geometry": {
+        "radius_estimate": "tight",
+        "elevation": "flat",
+        "camber": "flat"
+      },
+      "hazards_visible": [
+        "Barrier on outside"
+      ],
+      "racingLineNotes": "Long left hairpin onto the pit straight. Late apex for best drive out.",
+      "notes": "Final left hairpin. Drive out onto the pit straight. Critical for lap time."
+    }
+  ],
+  "researchConfidence": "high",
+  "sourceNotes": "Verified driver data \u2014 not AI-generated",
+  "prebuilt": true,
+  "_lastSaved": "2026-03-02T10:48:09.004821",
+  "_saveCount": 1,
+  "_history": [
+    {
+      "timestamp": "2026-03-02T10:48:09.004830",
+      "action": "save",
+      "cornerCount": 11
+    }
+  ]
+}

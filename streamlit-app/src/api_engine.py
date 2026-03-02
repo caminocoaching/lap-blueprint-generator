@@ -1,5 +1,5 @@
 """
-API Engine — Wraps Gemini, Claude, and OpenAI for the Lap Blueprint Generator.
+API Engine — Wraps Gemini and Claude for the Lap Blueprint Generator.
 """
 import json
 import re
@@ -8,7 +8,6 @@ import base64
 import requests
 import google.generativeai as genai
 from anthropic import Anthropic
-from openai import OpenAI
 
 
 def _repair_json(text):
@@ -59,11 +58,10 @@ class APIEngine:
         'claude-opus-4-5-20251101': 'Claude Opus 4.5 (Most Powerful)',
     }
 
-    def __init__(self, gemini_key=None, claude_key=None, openai_key=None,
+    def __init__(self, gemini_key=None, claude_key=None,
                  gemini_model='gemini-2.5-flash', claude_model='claude-sonnet-4-5-20250929'):
         self.gemini_key = gemini_key
         self.claude_key = claude_key
-        self.openai_key = openai_key
         self.gemini_model = gemini_model
         self.claude_model = claude_model
 
@@ -74,10 +72,6 @@ class APIEngine:
             self.claude_client = Anthropic(api_key=claude_key)
         else:
             self.claude_client = None
-        if openai_key:
-            self.openai_client = OpenAI(api_key=openai_key)
-        else:
-            self.openai_client = None
 
     # ── Gemini: Analyze Video Frames ─────────────────────────
 
@@ -678,7 +672,7 @@ Return JSON:
 
     def extract_track_template(self, image_b64, track_name, progress_cb=None):
         """
-        SWEEP 1: Extract the track TEMPLATE from a map image.
+        SWEEP 1: Extract the track TEMPLATE from a map image using Gemini.
 
         This is the first pass — just the structure:
         - How many corners?
@@ -686,32 +680,45 @@ Return JSON:
         - Rough severity (hairpin/tight/medium/fast/kink)
         - Corner sequence around the lap
 
+        Uses Gemini (strongest visual/spatial reasoning) — NOT GPT-4o.
         Does NOT try to identify specific visual targets (that's Sweep 2).
         The template is the skeleton that everything else hangs on.
         """
-        if not self.openai_client:
-            raise ValueError("OpenAI API key not configured")
+        if not self.gemini_key:
+            raise ValueError("Gemini API key not configured — required for track map reading")
 
         if progress_cb:
-            progress_cb(10, "Sweep 1: Reading track map for corner template...")
+            progress_cb(10, "Sweep 1: Reading track map with Gemini...")
 
-        prompt = f"""You are a motorsport track analyst. Look at this track map of {track_name}.
+        model = genai.GenerativeModel(self.gemini_model)
+
+        prompt = f"""You are a motorsport track analyst with expert spatial reasoning.
+Look at this track map of {track_name}.
 
 YOUR ONLY JOB: Count the corners and identify their basic properties.
 
-For EACH distinct corner (where the driver must change direction):
-1. Is it LEFT or RIGHT?
+STEP 1 — DETERMINE TRACK DIRECTION:
+- Look at the start/finish straight and any direction arrows on the map
+- If there's a pit lane, cars exit pits in the racing direction
+- Determine if the circuit runs CLOCKWISE or COUNTER-CLOCKWISE
+
+STEP 2 — TRACE THE LAP:
+Starting from the start/finish straight, follow the racing direction around the
+entire circuit. At EVERY point where the track curves, identify:
+1. Is the curve to the LEFT or RIGHT from the driver's perspective?
 2. How tight is it? (hairpin / tight / medium / fast_sweeper / kink)
-3. What order does it come in around the lap?
+
+STEP 3 — NUMBER THE CORNERS:
+Number each corner sequentially in the order the driver encounters them.
 
 RULES:
 - Count EVERY distinct change of direction as a separate corner
 - A kink is still a corner (just a fast one)
 - A chicane = 2 corners (one left, one right or vice versa)
 - A long sweeper that doesn't change direction = 1 corner
-- Follow the racing line direction around the circuit
-- If the track runs counter-clockwise, number the corners counter-clockwise
-- Be precise about left vs right — look at which way the track curves
+- LEFT means the track curves to the driver's LEFT as they drive through it
+- RIGHT means the track curves to the driver's RIGHT as they drive through it
+- Be VERY precise about left vs right — mentally drive the track and feel the steering
 
 DO NOT:
 - Guess at corner names unless they're labelled on the map
@@ -723,6 +730,7 @@ Return JSON:
   "trackName": "{track_name}",
   "trackDirection": "clockwise|counter-clockwise",
   "totalCorners": <int>,
+  "cornerSummary": "<X left-hand corners, Y right-hand corners>",
   "corners": [
     {{
       "number": <int>,
@@ -734,28 +742,45 @@ Return JSON:
   "layoutNotes": "<brief description of overall layout shape>"
 }}"""
 
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_b64}"
-                    }}
-                ]
-            }],
-            response_format={"type": "json_object"},
-            max_tokens=4096
-        )
+        # Build content parts: image + prompt
+        parts = [
+            {
+                "inline_data": {
+                    "mime_type": "image/jpeg",
+                    "data": image_b64
+                }
+            },
+            prompt
+        ]
 
-        result = json.loads(response.choices[0].message.content)
+        try:
+            response = model.generate_content(
+                parts,
+                generation_config=genai.GenerationConfig(
+                    temperature=0.1,
+                    max_output_tokens=4096,
+                    response_mime_type="application/json",
+                )
+            )
 
-        if progress_cb:
-            corners = result.get('corners', [])
-            progress_cb(40, f"Sweep 1: Template — {len(corners)} corners ({result.get('trackDirection', '?')})")
+            try:
+                result = json.loads(response.text)
+            except json.JSONDecodeError:
+                result = _repair_json(response.text)
 
-        return result
+            if progress_cb:
+                corners = result.get('corners', [])
+                left = sum(1 for c in corners if c.get('direction') == 'left')
+                right = sum(1 for c in corners if c.get('direction') == 'right')
+                direction = result.get('trackDirection', '?')
+                progress_cb(40, f"Sweep 1: {len(corners)} corners ({left}L, {right}R) — {direction}")
+
+            return result
+
+        except Exception as e:
+            if progress_cb:
+                progress_cb(40, f"Sweep 1 error: {e}")
+            raise
 
     # ── SWEEP 2: Guide → Enrich Template ──────────────────────
 
@@ -855,106 +880,6 @@ Return JSON:
                           if c.get('visual_targets', {}).get('braking'))
             total = len(result.get('corners', []))
             progress_cb(75, f"Sweep 2: {enriched}/{total} corners enriched with visual targets")
-
-        return result
-
-    # ── OpenAI: Track Map Analysis (legacy) ───────────────────
-
-    def analyze_track_map(self, image_b64, track_name, existing_corners=None, progress_cb=None):
-        """
-        Use GPT-4o vision to analyze a track map image.
-
-        Args:
-            image_b64: base64 encoded track map image
-            track_name: name of the track
-            existing_corners: optional list of corners already detected from video
-            progress_cb: callback(percent, message)
-
-        Returns: track geometry data with visual targets per corner
-        """
-        if not self.openai_client:
-            raise ValueError("OpenAI API key not configured")
-
-        if progress_cb:
-            progress_cb(10, "Analyzing track map with GPT-4o...")
-
-        existing_info = ""
-        if existing_corners:
-            existing_info = f"\n\nCorners already detected from onboard video:\n{json.dumps(existing_corners, indent=2)}\n\nValidate and enrich these corners with spatial data from the map."
-
-        prompt = f"""You are a visual target mapper for motorsport Quiet Eye training.
-
-Analyze this track map of {track_name}. For each corner, identify:
-
-1. PHYSICAL OBJECTS the driver can use as visual targets:
-   - Braking markers (boards, cones, marks on track surface)
-   - Apex references (inside kerb, paint, post, barrier)
-   - Exit references (outside kerb, barrier end, tree line)
-   - Straight markers (pit wall, bridge, advertising board)
-
-2. TRACK GEOMETRY:
-   - Corner direction (left/right)
-   - Approximate radius and severity
-   - Elevation changes if visible
-   - Camber (banking) if indicated
-
-3. HAZARDS visible on the map:
-   - Run-off areas
-   - Barriers close to track edge
-   - Gravel traps
-   - Tyre walls
-{existing_info}
-
-RULES:
-- Only identify objects that are PHYSICALLY VISIBLE on the map
-- Use specific descriptions: "50m board", "red kerb", "concrete barrier"
-- Never invent objects not shown on the map
-
-Return JSON:
-{{
-  "trackName": "{track_name}",
-  "corners": [
-    {{
-      "number": 1,
-      "name": "string",
-      "direction": "left|right",
-      "severity": "hairpin|tight|medium|fast|flat_out",
-      "visual_targets": {{
-        "braking": "specific object",
-        "apex": "specific object",
-        "exit": "specific object"
-      }},
-      "geometry": {{
-        "radius_estimate": "tight|medium|open",
-        "elevation": "flat|uphill|downhill|crest|dip",
-        "camber": "positive|negative|flat"
-      }},
-      "hazards_visible": ["list of nearby hazards"]
-    }}
-  ],
-  "trackCharacteristics": "brief overall description"
-}}"""
-
-        response = self.openai_client.chat.completions.create(
-            model="gpt-4o",
-            messages=[{
-                "role": "user",
-                "content": [
-                    {"type": "text", "text": prompt},
-                    {"type": "image_url", "image_url": {
-                        "url": f"data:image/jpeg;base64,{image_b64}"
-                    }}
-                ]
-            }],
-            response_format={"type": "json_object"},
-            max_tokens=4096
-        )
-
-        result = json.loads(response.choices[0].message.content)
-
-        if progress_cb:
-            corners = result.get('corners', [])
-            progress_cb(90, f"Mapped {len(corners)} corners from track map")
 
         return result
 

@@ -134,7 +134,7 @@ if track_name and not st.session_state.get('blueprint'):
             if has_map:
                 if st.button("🗺️ Run Sweep 1 — Extract Template from Map", type="primary"):
                     progress = st.progress(0)
-                    status = st.status("Sweep 1: Reading track map...")
+                    status = st.status("Sweep 1: Reading track map with Gemini...")
 
                     try:
                         map_bytes = st.session_state['track_map'].getvalue()
@@ -151,6 +151,7 @@ if track_name and not st.session_state.get('blueprint'):
                                 'trackName': track_name,
                                 'corners': corners,
                                 'trackDirection': template.get('trackDirection', ''),
+                                'cornerSummary': template.get('cornerSummary', ''),
                                 'layoutNotes': template.get('layoutNotes', ''),
                                 'trackCharacteristics': '',
                             }

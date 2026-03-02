@@ -168,7 +168,7 @@ st.markdown("""
 Close your eyes. See the track. Feel the flow before you ride it.
 
 This system builds a **5-lap progressive conditioning video** that programs
-your subconscious for automatic, in-flow performance — powered by two AIs
+your subconscious for automatic, in-flow performance — powered by three AIs
 working together to understand the track and place precise gaze markers.
 """)
 
