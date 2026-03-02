@@ -151,27 +151,31 @@ with guide_col:
 
 
 # ═══════════════════════════════════════════════════════════
-# STEP 2: TRACK ANALYSIS — Build the track model BEFORE video
-# The app is always learning. AI research ENRICHES, never replaces.
+# STEP 2: TRACK ANALYSIS — Two-Sweep Pipeline
+#   Sweep 1: Track Map → Template (corners, directions, severity)
+#   Sweep 2: Track Guide → Enrich Template (visual references, racing line)
+# The app is always learning. Every sweep adds knowledge, never replaces.
 # ═══════════════════════════════════════════════════════════
 if track_name and not st.session_state.get('track_model'):
     st.markdown("### Step 2 — Analyze Track Layout")
-    st.caption("Build the AI's mental model of the track from your map, guide, and/or web research.")
+    st.caption("Two sweeps: first the map gives us the corner template, then the guide fills in the detail.")
 
     has_map = st.session_state.get('track_map') is not None
     has_guide = st.session_state.get('track_guide_text', '') != ''
     has_openai = bool(st.session_state.get('openai_key', ''))
+    has_claude = bool(st.session_state.get('claude_key', ''))
 
-    col_status = st.columns(4)
-    col_status[0].markdown(f"{'✅' if has_map else '⬜'} Track Map")
-    col_status[1].markdown(f"{'✅' if has_guide else '⬜'} Track Guide")
-    col_status[2].markdown(f"{'✅' if has_openai else '⬜'} OpenAI Key")
-    col_status[3].markdown("🌐 Web Research")
+    # Source indicators
+    col_status = st.columns(3)
+    col_status[0].markdown(f"{'✅' if has_map and has_openai else '⬜'} Sweep 1: Track Map → Template")
+    col_status[1].markdown(f"{'✅' if has_guide and has_claude else '⬜'} Sweep 2: Guide → Visual References")
+    col_status[2].markdown("🌐 Web Research (fallback)")
 
-    st.caption("The AI will run deep web research on the track. "
-               "Map and guide add extra detail on top.")
+    if not has_map:
+        st.caption("Upload a track map to get the best template. "
+                   "Without a map, the AI will use web research as a fallback.")
 
-    if st.button("🗺️ Analyze Track Layout", type="primary"):
+    if st.button("🗺️ Build Track Model", type="primary"):
         progress = st.progress(0)
         status = st.status("Building track model...")
 
@@ -180,100 +184,151 @@ if track_name and not st.session_state.get('track_model'):
             'corners': [],
             'trackCharacteristics': '',
             'trackDirection': '',
-            'guideNotes': st.session_state.get('track_guide_text', ''),
         }
 
         try:
-            # ── PHASE 1: Deep web research (always runs) ──────
-            status.update(label=f"Researching {track_name} online...")
-            progress.progress(5)
+            # ═══ SWEEP 1: Map → Template ═══════════════════════
+            # The map gives us the STRUCTURE — how many corners, left/right, severity.
+            # This is the skeleton everything else hangs on.
 
-            try:
-                research_result = api.research_track(
-                    track_name,
-                    progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
-                )
-
-                research_corners = research_result.get('corners', [])
-                confidence = research_result.get('researchConfidence', 'unknown')
-
-                if research_corners:
-                    track_model['corners'] = research_corners
-                    track_model['trackDirection'] = research_result.get('trackDirection', '')
-                    track_model['trackCharacteristics'] = research_result.get('trackCharacteristics', '')
-                    track_model['trackLength'] = research_result.get('trackLength', '')
-                    track_model['country'] = research_result.get('country', '')
-                    track_model['notableFeatures'] = research_result.get('notableFeatures', [])
-                    track_model['researchConfidence'] = confidence
-                    track_model['sourceNotes'] = research_result.get('sourceNotes', '')
-
-                status.update(label=f"Research: {len(research_corners)} corners found (confidence: {confidence})")
-                progress.progress(40)
-
-            except Exception as e:
-                st.warning(f"Web research had an issue: {e}. Continuing with uploaded data...")
-                progress.progress(40)
-
-            # ── PHASE 2: Track map analysis (if uploaded) ─────
             map_data = st.session_state.get('track_map')
+
             if map_data and has_openai:
-                status.update(label="GPT-4o analyzing track map...")
-                progress.progress(45)
+                # ── Primary: GPT-4o reads the map ─────────────
+                status.update(label="Sweep 1: GPT-4o reading track map for corner template...")
+                progress.progress(5)
 
                 map_bytes = map_data.getvalue()
                 map_b64 = base64.b64encode(map_bytes).decode()
 
-                map_result = api.analyze_track_map(
+                template = api.extract_track_template(
                     map_b64, track_name,
-                    existing_corners=track_model.get('corners'),
                     progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
                 )
 
-                map_corners = map_result.get('corners', [])
-                if map_corners:
-                    track_model = merge_map_analysis(track_model, map_result)
+                template_corners = template.get('corners', [])
+                if template_corners:
+                    track_model['corners'] = template_corners
+                    track_model['trackDirection'] = template.get('trackDirection', '')
+                    track_model['layoutNotes'] = template.get('layoutNotes', '')
+                    n = len(template_corners)
+                    left = sum(1 for c in template_corners if c.get('direction') == 'left')
+                    right = n - left
+                    status.update(label=f"Sweep 1: Template — {n} corners ({left}L, {right}R)")
 
-                progress.progress(65)
+                progress.progress(40)
+
             elif map_data and not has_openai:
-                st.warning("Add your OpenAI API key in the sidebar to analyze the track map with GPT-4o.")
+                st.warning("Add your OpenAI API key to analyze the track map.")
+                progress.progress(10)
 
-            # ── PHASE 3: Track guide extraction (if uploaded) ─
+            if not track_model['corners']:
+                # ── Fallback: Web research for template ───────
+                status.update(label=f"Sweep 1 fallback: Researching {track_name} online...")
+                progress.progress(10)
+
+                try:
+                    research_result = api.research_track(
+                        track_name,
+                        progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
+                    )
+
+                    research_corners = research_result.get('corners', [])
+                    confidence = research_result.get('researchConfidence', 'unknown')
+
+                    if research_corners:
+                        track_model['corners'] = research_corners
+                        track_model['trackDirection'] = research_result.get('trackDirection', '')
+                        track_model['trackCharacteristics'] = research_result.get('trackCharacteristics', '')
+                        track_model['trackLength'] = research_result.get('trackLength', '')
+                        track_model['country'] = research_result.get('country', '')
+                        track_model['researchConfidence'] = confidence
+                        track_model['sourceNotes'] = research_result.get('sourceNotes', '')
+
+                    status.update(label=f"Sweep 1 (research): {len(research_corners)} corners (confidence: {confidence})")
+                    progress.progress(40)
+
+                except Exception as e:
+                    st.warning(f"Web research issue: {e}")
+                    progress.progress(40)
+
+            # ═══ SWEEP 2: Guide → Enrich Template ═════════════
+            # The guide has the DETAIL — specific physical references the
+            # driver can see. We map those onto the template from Sweep 1.
+
             guide_text = st.session_state.get('track_guide_text', '')
-            if guide_text and not guide_text.startswith('['):
-                status.update(label="Claude reading track guide...")
-                progress.progress(70)
 
-                guide_result = api.call_claude_pipeline(
-                    system_prompt=f"""You extract structured track data from racing guides.
-Return ONLY valid JSON with corner information.""",
-                    user_prompt=f"""Extract corner data from this track guide for {track_name}:
+            if guide_text and not guide_text.startswith('[') and track_model['corners']:
 
-{guide_text[:4000]}
+                if has_claude:
+                    # ── Primary: Claude enriches with guide ───────
+                    status.update(label="Sweep 2: Mapping guide detail onto corner template...")
+                    progress.progress(50)
 
-Return JSON:
-{{
-  "corners": [
-    {{
-      "number": <int>,
-      "name": "<corner name>",
-      "direction": "left|right",
-      "severity": "hairpin|tight|medium|fast|flat_out",
-      "notes": "<key info from guide: racing line, elevation, camber, hazards>"
-    }}
-  ],
-  "trackDirection": "clockwise|counter-clockwise",
-  "trackCharacteristics": "<brief summary>"
-}}"""
-                )
+                    try:
+                        enriched = api.enrich_template_with_guide(
+                            track_model, guide_text, track_name,
+                            progress_cb=lambda p, m: (progress.progress(p), status.update(label=m))
+                        )
 
-                track_model = merge_guide_data(track_model, guide_result)
+                        # Merge enrichment INTO existing template
+                        enriched_corners = enriched.get('corners', [])
+                        for ec in enriched_corners:
+                            for tc in track_model['corners']:
+                                if ec.get('number') == tc.get('number'):
+                                    # Guide name takes priority
+                                    if ec.get('name'):
+                                        tc['name'] = ec['name']
+                                    # Visual targets from guide
+                                    if ec.get('visual_targets'):
+                                        tc['visual_targets'] = ec['visual_targets']
+                                    # Racing line notes
+                                    if ec.get('racingLineNotes'):
+                                        tc['racingLineNotes'] = ec['racingLineNotes']
+                                    # Hazards
+                                    if ec.get('hazards'):
+                                        tc['hazards'] = ec['hazards']
+                                    # Guide notes
+                                    if ec.get('guideNotes'):
+                                        tc['guideNotes'] = ec['guideNotes']
+                                    # Track characteristics per corner
+                                    if ec.get('elevation'):
+                                        tc.setdefault('geometry', {})['elevation'] = ec['elevation']
+                                    if ec.get('camber'):
+                                        tc.setdefault('geometry', {})['camber'] = ec['camber']
 
-            # ── Save track model (the app learns) ─────────────
+                        if enriched.get('trackCharacteristics'):
+                            track_model['trackCharacteristics'] = enriched['trackCharacteristics']
+                        if enriched.get('trackDirection'):
+                            track_model['trackDirection'] = enriched['trackDirection']
+
+                        enriched_count = sum(1 for c in track_model['corners']
+                                             if c.get('visual_targets', {}).get('braking'))
+                        total = len(track_model['corners'])
+                        status.update(label=f"Sweep 2: {enriched_count}/{total} corners have visual references")
+
+                    except Exception as e:
+                        st.warning(f"Guide enrichment issue: {e}. Template still valid.")
+
+                    progress.progress(80)
+
+                else:
+                    st.warning("Add your Claude API key to enrich the template with guide data.")
+
+            elif guide_text and not track_model['corners']:
+                st.warning("Need a template first (track map or web research) before the guide can enrich it.")
+
+            # ═══ Save ═════════════════════════════════════════
             st.session_state['track_model'] = track_model
             save_track(track_model)
             progress.progress(100)
             n_corners = len(track_model.get('corners', []))
-            status.update(label=f"Track model built: {n_corners} corners — saved to local knowledge", state="complete")
+            enriched_count = sum(1 for c in track_model.get('corners', [])
+                                 if c.get('visual_targets', {}).get('braking'))
+            status.update(
+                label=f"Track model: {n_corners} corners, {enriched_count} with visual references — saved",
+                state="complete"
+            )
 
         except Exception as e:
             st.error(f"Track analysis failed: {e}")
@@ -294,40 +349,78 @@ if track_model and track_model.get('corners') and not track_model.get('skipped')
     if track_model.get('trackCharacteristics'):
         st.caption(track_model['trackCharacteristics'])
 
-    # ── Enrichment options ────────────────────────────────
-    enrich_col1, enrich_col2 = st.columns(2)
-    with enrich_col1:
-        if st.button("🌐 Enrich with AI Research", help="Run AI web research and merge new info into existing data"):
-            with st.spinner("Running AI research to enrich track data..."):
+    # ── Re-run sweeps to update ──────────────────────────
+    sweep_col1, sweep_col2, sweep_col3 = st.columns(3)
+    with sweep_col1:
+        map_data = st.session_state.get('track_map')
+        has_openai = bool(st.session_state.get('openai_key', ''))
+        if map_data and has_openai:
+            if st.button("🗺️ Re-run Sweep 1 (Map)", help="Re-read the track map to update the template"):
+                with st.spinner("Re-reading track map..."):
+                    try:
+                        map_bytes = map_data.getvalue()
+                        map_b64 = base64.b64encode(map_bytes).decode()
+                        template = api.extract_track_template(map_b64, track_name)
+                        # Update corner structure but keep any existing enrichments
+                        new_corners = template.get('corners', [])
+                        old_corners = track_model.get('corners', [])
+                        # Carry over enrichments from old corners by number
+                        for nc in new_corners:
+                            for oc in old_corners:
+                                if nc.get('number') == oc.get('number'):
+                                    # Keep enrichments
+                                    for key in ['visual_targets', 'racingLineNotes', 'guideNotes',
+                                                'hazards', 'geometry', '_userEdited']:
+                                        if oc.get(key):
+                                            nc[key] = oc[key]
+                                    if oc.get('name') and oc.get('_userEdited'):
+                                        nc['name'] = oc['name']
+                        track_model['corners'] = new_corners
+                        track_model['trackDirection'] = template.get('trackDirection', track_model.get('trackDirection', ''))
+                        st.session_state['track_model'] = track_model
+                        save_track(track_model)
+                        st.success(f"Template updated: {len(new_corners)} corners")
+                        st.rerun()
+                    except Exception as e:
+                        st.warning(f"Map re-read issue: {e}")
+    with sweep_col2:
+        guide_text = st.session_state.get('track_guide_text', '')
+        has_claude = bool(st.session_state.get('claude_key', ''))
+        if guide_text and not guide_text.startswith('[') and has_claude:
+            if st.button("📖 Re-run Sweep 2 (Guide)", help="Re-read the guide to update visual references"):
+                with st.spinner("Re-reading track guide..."):
+                    try:
+                        enriched = api.enrich_template_with_guide(track_model, guide_text, track_name)
+                        enriched_corners = enriched.get('corners', [])
+                        for ec in enriched_corners:
+                            for tc in track_model['corners']:
+                                if ec.get('number') == tc.get('number'):
+                                    if ec.get('name'):
+                                        tc['name'] = ec['name']
+                                    if ec.get('visual_targets'):
+                                        tc['visual_targets'] = ec['visual_targets']
+                                    if ec.get('racingLineNotes'):
+                                        tc['racingLineNotes'] = ec['racingLineNotes']
+                                    if ec.get('guideNotes'):
+                                        tc['guideNotes'] = ec['guideNotes']
+                        st.session_state['track_model'] = track_model
+                        save_track(track_model)
+                        st.success("Visual references updated from guide")
+                        st.rerun()
+                    except Exception as e:
+                        st.warning(f"Guide enrichment issue: {e}")
+    with sweep_col3:
+        if st.button("🌐 Enrich with AI Research", help="Run web research and merge into existing data"):
+            with st.spinner("Running AI research..."):
                 try:
                     research_result = api.research_track(track_name)
                     enriched = merge_ai_research(track_model, research_result)
                     st.session_state['track_model'] = enriched
                     save_track(enriched)
-                    st.success(f"AI research merged — enriched with new details")
+                    st.success("AI research merged")
                     st.rerun()
                 except Exception as e:
                     st.warning(f"AI research issue: {e}")
-    with enrich_col2:
-        map_data = st.session_state.get('track_map')
-        has_openai = bool(st.session_state.get('openai_key', ''))
-        if map_data and has_openai:
-            if st.button("🗺️ Enrich with Track Map", help="Re-analyze track map and merge visual targets"):
-                with st.spinner("Analyzing track map..."):
-                    try:
-                        map_bytes = map_data.getvalue()
-                        map_b64 = base64.b64encode(map_bytes).decode()
-                        map_result = api.analyze_track_map(
-                            map_b64, track_name,
-                            existing_corners=track_model.get('corners')
-                        )
-                        enriched = merge_map_analysis(track_model, map_result)
-                        st.session_state['track_model'] = enriched
-                        save_track(enriched)
-                        st.success("Track map data merged")
-                        st.rerun()
-                    except Exception as e:
-                        st.warning(f"Map analysis issue: {e}")
 
     # ── Editable corner list ──────────────────────────────
     for c in track_model['corners']:

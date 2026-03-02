@@ -276,14 +276,24 @@ Characteristics: {track_model.get('trackCharacteristics', '')}
 EXPECTED CORNERS (match these to what you see in the video):
 """
                 for c in known_corners:
+                    vt = c.get('visual_targets', {})
+                    braking_ref = vt.get('braking', 'braking markers')
+                    apex_ref = vt.get('apex', 'inside kerb')
+                    exit_ref = vt.get('exit', 'exit kerb')
+                    racing_notes = c.get('racingLineNotes', c.get('guideNotes', ''))
+
                     track_context += (
                         f"  Corner {c.get('number', '?')}: {c.get('name', '?')} "
-                        f"— {c.get('direction', '?')} {c.get('severity', '?')} "
-                        f"— Look for: {c.get('visual_targets', {}).get('braking', 'braking markers')}, "
-                        f"{c.get('visual_targets', {}).get('apex', 'inside kerb')}, "
-                        f"{c.get('visual_targets', {}).get('exit', 'exit kerb')}\n"
+                        f"— {c.get('direction', '?')} {c.get('severity', '?')}\n"
+                        f"    LOOK FOR: Brake={braking_ref} | Apex={apex_ref} | Exit={exit_ref}\n"
                     )
-                track_context += "\nYour job is to TIMESTAMP when each of these known corners appears in the video."
+                    if racing_notes:
+                        track_context += f"    NOTES: {racing_notes}\n"
+
+                track_context += (
+                    "\nYour job is to TIMESTAMP when each of these known corners appears in the video.\n"
+                    "Use the visual references above to confirm you've found the right corner."
+                )
 
         prompt = f"""You are a motorsport visual target analyst using Quiet Eye (QE) science by Joan Vickers.
 {track_context}
@@ -664,7 +674,191 @@ Return JSON:
 
         return json.loads(text)
 
-    # ── OpenAI: Track Map Analysis ───────────────────────────
+    # ── SWEEP 1: Track Map → Template ────────────────────────
+
+    def extract_track_template(self, image_b64, track_name, progress_cb=None):
+        """
+        SWEEP 1: Extract the track TEMPLATE from a map image.
+
+        This is the first pass — just the structure:
+        - How many corners?
+        - Left or right?
+        - Rough severity (hairpin/tight/medium/fast/kink)
+        - Corner sequence around the lap
+
+        Does NOT try to identify specific visual targets (that's Sweep 2).
+        The template is the skeleton that everything else hangs on.
+        """
+        if not self.openai_client:
+            raise ValueError("OpenAI API key not configured")
+
+        if progress_cb:
+            progress_cb(10, "Sweep 1: Reading track map for corner template...")
+
+        prompt = f"""You are a motorsport track analyst. Look at this track map of {track_name}.
+
+YOUR ONLY JOB: Count the corners and identify their basic properties.
+
+For EACH distinct corner (where the driver must change direction):
+1. Is it LEFT or RIGHT?
+2. How tight is it? (hairpin / tight / medium / fast_sweeper / kink)
+3. What order does it come in around the lap?
+
+RULES:
+- Count EVERY distinct change of direction as a separate corner
+- A kink is still a corner (just a fast one)
+- A chicane = 2 corners (one left, one right or vice versa)
+- A long sweeper that doesn't change direction = 1 corner
+- Follow the racing line direction around the circuit
+- If the track runs counter-clockwise, number the corners counter-clockwise
+- Be precise about left vs right — look at which way the track curves
+
+DO NOT:
+- Guess at corner names unless they're labelled on the map
+- Invent visual references you can't see
+- Include pit lane or pit entry as corners
+
+Return JSON:
+{{
+  "trackName": "{track_name}",
+  "trackDirection": "clockwise|counter-clockwise",
+  "totalCorners": <int>,
+  "corners": [
+    {{
+      "number": <int>,
+      "direction": "left|right",
+      "severity": "hairpin|tight|medium|fast_sweeper|kink",
+      "name": "<only if labelled on map, otherwise empty string>"
+    }}
+  ],
+  "layoutNotes": "<brief description of overall layout shape>"
+}}"""
+
+        response = self.openai_client.chat.completions.create(
+            model="gpt-4o",
+            messages=[{
+                "role": "user",
+                "content": [
+                    {"type": "text", "text": prompt},
+                    {"type": "image_url", "image_url": {
+                        "url": f"data:image/jpeg;base64,{image_b64}"
+                    }}
+                ]
+            }],
+            response_format={"type": "json_object"},
+            max_tokens=4096
+        )
+
+        result = json.loads(response.choices[0].message.content)
+
+        if progress_cb:
+            corners = result.get('corners', [])
+            progress_cb(40, f"Sweep 1: Template — {len(corners)} corners ({result.get('trackDirection', '?')})")
+
+        return result
+
+    # ── SWEEP 2: Guide → Enrich Template ──────────────────────
+
+    def enrich_template_with_guide(self, template, guide_text, track_name, progress_cb=None):
+        """
+        SWEEP 2: Take the template from Sweep 1 and enrich it with the track guide.
+
+        The guide has the detail — braking references, apex kerbs, racing lines,
+        elevation, camber, hazards. This sweep maps that detail onto the template
+        so every corner gets specific visual references the video AI can look for.
+        """
+        if not self.claude_client:
+            raise ValueError("Claude API key not configured")
+
+        if progress_cb:
+            progress_cb(50, "Sweep 2: Enriching template with track guide...")
+
+        template_json = json.dumps(template.get('corners', []), indent=2)
+
+        system_prompt = """You are a motorsport visual target specialist.
+You have a track TEMPLATE (corner count, directions, severities) and a TRACK GUIDE.
+Your job is to map the guide's detail onto the template — filling in the specific
+visual references for each corner.
+
+Return ONLY valid JSON. Never invent information not in the guide."""
+
+        user_prompt = f"""TRACK: {track_name}
+
+TEMPLATE (from map analysis — this is the correct corner count and sequence):
+{template_json}
+
+TRACK GUIDE CONTENT:
+{guide_text[:6000]}
+
+For EACH corner in the template, extract from the guide:
+
+1. **Visual targets** the driver can physically see:
+   - braking: What physical object marks the braking point? (board, cone, mark, shadow, building)
+   - apex: What physical object marks the apex? (kerb colour, paint line, post, grass edge)
+   - exit: What physical object marks the exit? (kerb end, barrier, tree line, fence)
+
+2. **Corner name** if the guide gives one
+
+3. **Racing line notes** (late apex, double apex, carry speed, etc.)
+
+4. **Track characteristics** at this corner (elevation, camber, surface)
+
+5. **Hazards** (run-off type, wall proximity, gravel)
+
+IMPORTANT:
+- The template corner count is CORRECT — do not add or remove corners
+- If the guide doesn't mention a specific corner, leave its visual targets empty
+- If the guide uses different corner numbering, map it to the template's sequence
+- Only include information that's actually in the guide
+
+Return JSON:
+{{
+  "corners": [
+    {{
+      "number": <matching template number>,
+      "name": "<from guide or empty>",
+      "direction": "<keep from template>",
+      "severity": "<keep from template>",
+      "visual_targets": {{
+        "braking": "<specific physical object from guide>",
+        "apex": "<specific physical object from guide>",
+        "exit": "<specific physical object from guide>"
+      }},
+      "racingLineNotes": "<from guide>",
+      "elevation": "<from guide: flat/uphill/downhill/crest/dip>",
+      "camber": "<from guide: positive/negative/flat/off-camber>",
+      "hazards": ["<from guide>"],
+      "guideNotes": "<any other useful detail from the guide>"
+    }}
+  ],
+  "trackDirection": "<from guide if stated>",
+  "trackCharacteristics": "<overall summary from guide>"
+}}"""
+
+        response = self.claude_client.messages.create(
+            model=self.claude_model,
+            max_tokens=8192,
+            temperature=0,
+            system=system_prompt,
+            messages=[{"role": "user", "content": user_prompt}]
+        )
+
+        text = response.content[0].text.strip()
+        if text.startswith('```'):
+            lines = text.split('\n')
+            text = '\n'.join(lines[1:-1])
+
+        result = json.loads(text)
+
+        if progress_cb:
+            enriched = sum(1 for c in result.get('corners', [])
+                          if c.get('visual_targets', {}).get('braking'))
+            total = len(result.get('corners', []))
+            progress_cb(75, f"Sweep 2: {enriched}/{total} corners enriched with visual targets")
+
+        return result
+
+    # ── OpenAI: Track Map Analysis (legacy) ───────────────────
 
     def analyze_track_map(self, image_b64, track_name, existing_corners=None, progress_cb=None):
         """
