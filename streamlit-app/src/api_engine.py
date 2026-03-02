@@ -791,20 +791,27 @@ Return JSON:
             raise
 
         # ═══════════════════════════════════════════════════════
-        # PASS 2 — PURE REASONING: Compute L/R from headings
-        # (NO image — text only, so no spatial confusion)
+        # PASS 2 — PURE REASONING via CLAUDE: Compute L/R from headings
+        # Gemini does vision (10/10), Claude does reasoning (reliable JSON)
         # ═══════════════════════════════════════════════════════
+        if not self.claude_client:
+            raise ValueError("Claude API key required for Pass 2 reasoning")
+
         pass1_json = json.dumps(pass1_result, indent=2)
 
-        pass2_prompt = f"""You are a navigation expert. Given COMPASS HEADINGS at each corner
-of a racing circuit, determine the direction of travel and whether each turn is LEFT or RIGHT.
+        pass2_system = """You are a navigation expert who computes turn directions from compass headings.
+You will receive geometric descriptions of a racing circuit's corners (compass headings
+approaching and leaving each corner). Your job is to determine whether each turn is
+LEFT or RIGHT using pure compass rotation logic.
 
-Here is the geometric description of {track_name}:
+Return ONLY valid JSON. No markdown, no code blocks, no explanation outside the JSON."""
+
+        pass2_user = f"""Here is the geometric description of {track_name} from visual analysis:
 
 {pass1_json}
 
 RULES FOR DETERMINING LEFT vs RIGHT:
-When you are heading in a direction and the road changes to a new heading:
+When heading in a direction and the road changes to a new heading:
 - If the heading rotates COUNTER-CLOCKWISE (e.g., North → West, East → North,
   South → East, West → South), that is a LEFT turn
 - If the heading rotates CLOCKWISE (e.g., North → East, East → South,
@@ -814,7 +821,7 @@ COMPASS ROTATION REFERENCE:
 Clockwise order: N → NE → E → SE → S → SW → W → NW → N
 Counter-clockwise: N → NW → W → SW → S → SE → E → NE → N
 
-WORK THROUGH EACH CORNER:
+WORK THROUGH EACH CORNER step by step:
 For each corner, take the approach heading and exit heading.
 Determine which way the heading rotated (CW = right turn, CCW = left turn).
 
@@ -850,68 +857,48 @@ Return JSON:
 }}"""
 
         if progress_cb:
-            progress_cb(22, "Pass 2: Computing L/R from compass headings (text-only reasoning)...")
+            progress_cb(22, "Pass 2: Claude computing L/R from compass headings...")
 
-        # Try up to 2 attempts — first with JSON mode, fallback without
-        last_error = None
-        for attempt in range(2):
+        try:
+            pass2_response = self.claude_client.messages.create(
+                model=self.claude_model,
+                max_tokens=4096,
+                temperature=0,
+                system=pass2_system,
+                messages=[{"role": "user", "content": pass2_user}]
+            )
+
+            raw_text = pass2_response.content[0].text.strip()
+            print(f"[Sweep1 Pass2 Claude] response length={len(raw_text)}, first 300 chars: {raw_text[:300]}")
+
+            # Strip markdown code blocks if present
+            if raw_text.startswith('```'):
+                lines = raw_text.split('\n')
+                raw_text = '\n'.join(lines[1:-1] if lines[-1].strip() == '```' else lines[1:])
+
             try:
-                # Attempt 1: with response_mime_type  Attempt 2: without (free-form + extract)
-                if attempt == 0:
-                    pass2_response = model.generate_content(
-                        pass2_prompt,
-                        generation_config=genai.GenerationConfig(
-                            temperature=0.1,
-                            max_output_tokens=4096,
-                            response_mime_type="application/json",
-                        )
-                    )
-                else:
-                    if progress_cb:
-                        progress_cb(25, "Pass 2 retry: free-form reasoning...")
-                    pass2_response = model.generate_content(
-                        pass2_prompt + "\n\nIMPORTANT: Your response must be ONLY valid JSON, nothing else.",
-                        generation_config=genai.GenerationConfig(
-                            temperature=0.1,
-                            max_output_tokens=4096,
-                        )
-                    )
+                result = json.loads(raw_text)
+            except json.JSONDecodeError:
+                result = _repair_json(raw_text)
 
-                raw_text = pass2_response.text if pass2_response.text else ""
-                print(f"[Sweep1 Pass2] attempt={attempt+1}, response length={len(raw_text)}, first 200 chars: {raw_text[:200]}")
+            # Add the direction evidence from pass 1
+            result['directionEvidence'] = result.get('reasoning', '')
+            result['totalCorners'] = len(result.get('corners', []))
 
-                if not raw_text.strip():
-                    raise json.JSONDecodeError("Empty response from Gemini", "", 0)
+            if progress_cb:
+                corners = result.get('corners', [])
+                left = sum(1 for c in corners if c.get('direction') == 'left')
+                right = sum(1 for c in corners if c.get('direction') == 'right')
+                direction = result.get('trackDirection', '?')
+                progress_cb(40, f"Sweep 1: {len(corners)} corners ({left}L, {right}R) — {direction}")
 
-                try:
-                    result = json.loads(raw_text)
-                except json.JSONDecodeError:
-                    result = _repair_json(raw_text)
+            return result
 
-                # Add the direction evidence from pass 1
-                result['directionEvidence'] = result.get('reasoning', '')
-                result['totalCorners'] = len(result.get('corners', []))
-
-                if progress_cb:
-                    corners = result.get('corners', [])
-                    left = sum(1 for c in corners if c.get('direction') == 'left')
-                    right = sum(1 for c in corners if c.get('direction') == 'right')
-                    direction = result.get('trackDirection', '?')
-                    progress_cb(40, f"Sweep 1: {len(corners)} corners ({left}L, {right}R) — {direction}")
-
-                return result
-
-            except Exception as e:
-                last_error = e
-                print(f"[Sweep1 Pass2] attempt={attempt+1} failed: {e}")
-                if attempt == 0:
-                    time.sleep(1)
-                    continue
-
-        # Both attempts failed
-        if progress_cb:
-            progress_cb(40, f"Pass 2 error: {last_error}")
-        raise last_error
+        except Exception as e:
+            if progress_cb:
+                progress_cb(40, f"Pass 2 error: {e}")
+            print(f"[Sweep1 Pass2 Claude] error: {e}")
+            raise
 
     # ── SWEEP 2: Guide → Enrich Template ──────────────────────
 
