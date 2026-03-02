@@ -3,7 +3,7 @@ Builder — Main workflow page for creating Quiet Eye blueprints.
 
 PIPELINE ORDER:
   Step 1: Data Collection — Track name, map, guide (understand the layout FIRST)
-  Step 2: Track Analysis  — GPT-4o reads map, Claude reads guide → track model
+  Step 2: Track Analysis  — Gemini reads map, Claude reads guide → track model
   Step 3: Upload & Trim   — Bring in the onboard video
   Step 4: Video Analysis   — Gemini forward pass WITH track context → reverse run
   Step 5: Generate Blueprint — Claude builds QE gaze markers
@@ -39,7 +39,6 @@ from src.pdf_generator import generate_blueprint_pdf
 api = APIEngine(
     gemini_key=gemini_key,
     claude_key=claude_key,
-    openai_key=st.session_state.get('openai_key', ''),
     gemini_model=st.session_state.get('gemini_model', 'gemini-2.5-flash'),
     claude_model=st.session_state.get('claude_model', 'claude-sonnet-4-5-20250929'),
 )
@@ -129,11 +128,10 @@ if track_name and not st.session_state.get('blueprint'):
             st.image(track_map, caption="Track Map", use_container_width=True)
 
         has_map = st.session_state.get('track_map') is not None
-        has_openai = bool(st.session_state.get('openai_key', ''))
 
         btn_col1, btn_col2 = st.columns(2)
         with btn_col1:
-            if has_map and has_openai:
+            if has_map:
                 if st.button("🗺️ Run Sweep 1 — Extract Template from Map", type="primary"):
                     progress = st.progress(0)
                     status = st.status("Sweep 1: Reading track map...")
@@ -168,9 +166,6 @@ if track_name and not st.session_state.get('blueprint'):
 
                     except Exception as e:
                         st.error(f"Sweep 1 failed: {e}")
-
-            elif has_map and not has_openai:
-                st.warning("Add your **OpenAI API key** in the sidebar to analyze the track map.")
 
         with btn_col2:
             if st.button("🌐 No map — use AI Research instead"):

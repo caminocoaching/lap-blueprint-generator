@@ -98,32 +98,24 @@ with st.sidebar:
     with st.expander("🔑 API Keys", expanded=not all([
         st.session_state.get('gemini_key'),
         st.session_state.get('claude_key'),
-        st.session_state.get('openai_key'),
     ])):
         st.caption("Keys are stored in your session — never sent anywhere except the API providers.")
 
         # Try to load from secrets first
         default_gemini = st.secrets.get("GEMINI_KEY", "") if hasattr(st, 'secrets') else ""
         default_claude = st.secrets.get("CLAUDE_KEY", "") if hasattr(st, 'secrets') else ""
-        default_openai = st.secrets.get("OPENAI_KEY", "") if hasattr(st, 'secrets') else ""
 
         gemini_key = st.text_input(
             "Gemini API Key",
             value=st.session_state.get('gemini_key', default_gemini),
             type="password",
-            help="For video corner detection. Get yours at aistudio.google.com"
+            help="For video analysis + track map reading. Get yours at aistudio.google.com"
         )
         claude_key = st.text_input(
             "Claude API Key",
             value=st.session_state.get('claude_key', default_claude),
             type="password",
-            help="For blueprint generation. Get yours at console.anthropic.com"
-        )
-        openai_key = st.text_input(
-            "OpenAI API Key",
-            value=st.session_state.get('openai_key', default_openai),
-            type="password",
-            help="For track map analysis. Get yours at platform.openai.com"
+            help="For blueprint generation + guide enrichment. Get yours at console.anthropic.com"
         )
 
         # Auto-save to session state AND persist to local file
@@ -131,21 +123,17 @@ with st.sidebar:
             st.session_state['gemini_key'] = gemini_key
         if claude_key:
             st.session_state['claude_key'] = claude_key
-        if openai_key:
-            st.session_state['openai_key'] = openai_key
 
         # Persist keys to disk so they survive refresh
         _save_keys({
             'gemini_key': gemini_key,
             'claude_key': claude_key,
-            'openai_key': openai_key,
         })
 
         # Status indicators
-        cols = st.columns(3)
+        cols = st.columns(2)
         cols[0].markdown(f"{'✅' if gemini_key else '❌'} Gemini")
         cols[1].markdown(f"{'✅' if claude_key else '❌'} Claude")
-        cols[2].markdown(f"{'✅' if openai_key else '❌'} OpenAI")
 
     # Model selection
     with st.expander("⚙️ Model Settings"):
@@ -180,7 +168,7 @@ st.markdown("""
 Close your eyes. See the track. Feel the flow before you ride it.
 
 This system builds a **5-lap progressive conditioning video** that programs
-your subconscious for automatic, in-flow performance — powered by three AIs
+your subconscious for automatic, in-flow performance — powered by two AIs
 working together to understand the track and place precise gaze markers.
 """)
 
@@ -195,7 +183,7 @@ with col1:
     Track name + map + guide. The AI needs to understand the layout first.<br><br>
 
     <strong style="color:#00f0ff;">Step 2 — Track Analysis</strong><br>
-    Deep web research + GPT-4o map analysis + Claude guide extraction.<br>
+    Gemini reads the track map + Claude enriches with guide data.<br>
     Builds a complete track model before watching any video.<br><br>
 
     <strong style="color:#00f0ff;">Step 3 — Upload &amp; Trim Video</strong><br>
@@ -218,18 +206,16 @@ with col1:
         st.switch_page("pages/1_Builder.py")
 
 with col2:
-    st.markdown("### Three AIs, One Track")
+    st.markdown("### Two AIs, One Track")
     st.markdown("""
     <div class="blueprint-card">
-    <strong style="color:#ff9f1c;">Gemini 2.5 Flash</strong><br>
-    Video vision — watches onboard footage, detects corners,<br>
-    timestamps gaze targets, runs forward + reverse passes.<br><br>
-    <strong style="color:#ff9f1c;">GPT-4o Vision</strong><br>
-    Map analysis — reads bird's-eye track maps to identify<br>
-    physical landmarks, geometry, and hazards.<br><br>
-    <strong style="color:#ff9f1c;">Claude Sonnet</strong><br>
-    Blueprint brain — 4-step deterministic pipeline builds<br>
-    QE gaze sequences using Quiet Eye science.
+    <strong style="color:#ff9f1c;">Gemini</strong><br>
+    Visual engine — reads track maps, watches onboard footage,<br>
+    detects corners, timestamps gaze targets,<br>
+    runs forward + reverse passes.<br><br>
+    <strong style="color:#ff9f1c;">Claude</strong><br>
+    Blueprint brain — enriches track guides, 4-step deterministic<br>
+    pipeline builds QE gaze sequences using Quiet Eye science.
     </div>
     """, unsafe_allow_html=True)
 
