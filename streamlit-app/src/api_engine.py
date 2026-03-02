@@ -811,6 +811,14 @@ Return JSON:
         if progress_cb:
             progress_cb(8, "Pass 1: Gemini locating pixel coordinates of each corner...")
 
+        # Safety settings — track maps are harmless but can trigger filters
+        safety_settings = [
+            {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_SEXUALLY_EXPLICIT", "threshold": "BLOCK_NONE"},
+            {"category": "HARM_CATEGORY_DANGEROUS_CONTENT", "threshold": "BLOCK_NONE"},
+        ]
+
         try:
             pass1_response = model.generate_content(
                 [image_part, pass1_prompt],
@@ -818,10 +826,25 @@ Return JSON:
                     temperature=0.1,
                     max_output_tokens=4096,
                     response_mime_type="application/json",
-                )
+                ),
+                safety_settings=safety_settings,
             )
 
-            raw_pass1 = pass1_response.text if pass1_response.text else ""
+            # Handle blocked responses before accessing .text
+            if not pass1_response.candidates:
+                block_reason = getattr(pass1_response, 'prompt_feedback', 'unknown')
+                raise ValueError(f"Gemini blocked the response. Feedback: {block_reason}")
+
+            candidate = pass1_response.candidates[0]
+            if not candidate.content or not candidate.content.parts:
+                finish_reason = getattr(candidate, 'finish_reason', 'unknown')
+                safety_ratings = getattr(candidate, 'safety_ratings', [])
+                raise ValueError(
+                    f"Gemini returned no content. Finish reason: {finish_reason}. "
+                    f"Safety: {safety_ratings}"
+                )
+
+            raw_pass1 = candidate.content.parts[0].text or ""
             print(f"[Sweep1 Pass1] response length={len(raw_pass1)}")
 
             if not raw_pass1.strip():
