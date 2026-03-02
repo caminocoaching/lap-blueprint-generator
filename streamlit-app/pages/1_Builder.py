@@ -100,6 +100,24 @@ st.session_state['track_name'] = track_name
 if track_name and not st.session_state.get('blueprint'):
     st.markdown("### Step 2 — Build Track Model")
 
+    # Full reset button — clears everything and starts fresh
+    reset_col1, reset_col2 = st.columns([4, 1])
+    with reset_col2:
+        if st.button("🔄 Reset All", help="Clear everything and start from scratch"):
+            # Clean up trimmed video temp file
+            trimmed = st.session_state.get('trimmed_video_path')
+            if trimmed:
+                VideoProcessor.cleanup_temp_file(trimmed)
+            for key in ['blueprint', 'corners', 'track_model', 'video_path', 'video_name',
+                         'video_meta', 'conditioning_video', 'reverse_notes', 'track_notes',
+                         'trimmed_video_path', 'trimmed_meta', 'start_time', 'end_time', 'scrub_time',
+                         'detected_corners', 'confirmed_markers', 'markers_confirmed',
+                         'reverse_done', 'gemini_video_file', 'analysis_start', 'analysis_end',
+                         'sweep1_done', 'template_confirmed', 'sweep2_done',
+                         'track_map', 'track_guide', 'track_guide_text']:
+                st.session_state.pop(key, None)
+            st.rerun()
+
     sweep1_done = st.session_state.get('sweep1_done', False)
     template_confirmed = st.session_state.get('template_confirmed', False)
     sweep2_done = st.session_state.get('sweep2_done', False)
