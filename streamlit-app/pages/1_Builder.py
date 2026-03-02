@@ -30,6 +30,10 @@ from src.api_engine import APIEngine
 from src.video_processor import VideoProcessor
 from src.blueprint_pipeline import BlueprintPipeline
 from src.ruapuna_blueprint import is_ruapuna, get_blueprint as get_ruapuna, get_track_model as get_ruapuna_track_model
+from src.track_store import (
+    has_saved_data, load_track, save_track, merge_ai_research,
+    merge_map_analysis, merge_guide_data, update_corner, add_corner, remove_corner
+)
 from src.conditioning_renderer import ConditioningRenderer
 from src.pdf_generator import generate_blueprint_pdf
 
@@ -80,13 +84,25 @@ track_name = st.text_input(
 )
 st.session_state['track_name'] = track_name
 
-# Check for Ruapuna pre-built data (bypass unreliable AI research)
-if track_name and is_ruapuna(track_name):
-    # Auto-load verified track model if not already loaded
-    if not st.session_state.get('track_model'):
-        st.session_state['track_model'] = get_ruapuna_track_model()
+# ── Load existing track knowledge ─────────────────────────
+# The app always learns. Check for saved data first, then pre-built, then AI.
+if track_name and not st.session_state.get('track_model'):
+    # Priority 1: Previously saved/edited track data (the app remembered)
+    saved = load_track(track_name)
+    if saved:
+        st.session_state['track_model'] = saved
+        n = len(saved.get('corners', []))
+        st.info(f"Loaded saved track data: {n} corners (last updated: {saved.get('_lastSaved', 'unknown')[:10]})")
 
-    st.success("🎯 Ruapuna detected! Verified 11-corner track model loaded (7 left, 4 right).")
+    # Priority 2: Pre-built verified data (Ruapuna etc.)
+    elif is_ruapuna(track_name):
+        prebuilt = get_ruapuna_track_model()
+        st.session_state['track_model'] = prebuilt
+        # Save to track store so future edits persist
+        save_track(prebuilt)
+
+if track_name and is_ruapuna(track_name) and not st.session_state.get('blueprint'):
+    st.success("🎯 Ruapuna — verified track model loaded. You can edit any corner below.")
     if st.button("Load Full Ruapuna QE Blueprint", type="primary"):
         ruapuna = get_ruapuna()
         st.session_state['blueprint'] = ruapuna
@@ -136,6 +152,7 @@ with guide_col:
 
 # ═══════════════════════════════════════════════════════════
 # STEP 2: TRACK ANALYSIS — Build the track model BEFORE video
+# The app is always learning. AI research ENRICHES, never replaces.
 # ═══════════════════════════════════════════════════════════
 if track_name and not st.session_state.get('track_model'):
     st.markdown("### Step 2 — Analyze Track Layout")
@@ -145,14 +162,13 @@ if track_name and not st.session_state.get('track_model'):
     has_guide = st.session_state.get('track_guide_text', '') != ''
     has_openai = bool(st.session_state.get('openai_key', ''))
 
-    # Data source indicators
     col_status = st.columns(4)
     col_status[0].markdown(f"{'✅' if has_map else '⬜'} Track Map")
     col_status[1].markdown(f"{'✅' if has_guide else '⬜'} Track Guide")
     col_status[2].markdown(f"{'✅' if has_openai else '⬜'} OpenAI Key")
     col_status[3].markdown("🌐 Web Research")
 
-    st.caption("The AI will always run deep web research on the track. "
+    st.caption("The AI will run deep web research on the track. "
                "Map and guide add extra detail on top.")
 
     if st.button("🗺️ Analyze Track Layout", type="primary"):
@@ -214,29 +230,8 @@ if track_name and not st.session_state.get('track_model'):
                 )
 
                 map_corners = map_result.get('corners', [])
-
                 if map_corners:
-                    if not track_model['corners']:
-                        # No research data — use map corners directly
-                        track_model['corners'] = map_corners
-                    else:
-                        # Enrich research corners with map visual targets
-                        for mc in map_corners:
-                            for rc in track_model['corners']:
-                                if mc.get('number') == rc.get('number'):
-                                    # Map has precise visual targets — prefer these
-                                    if mc.get('visual_targets'):
-                                        rc['visual_targets'] = mc['visual_targets']
-                                    if mc.get('geometry'):
-                                        rc['geometry'] = mc['geometry']
-                                    if mc.get('hazards_visible'):
-                                        rc['hazards_visible'] = mc['hazards_visible']
-
-                if map_result.get('trackCharacteristics'):
-                    existing = track_model.get('trackCharacteristics', '')
-                    track_model['trackCharacteristics'] = (
-                        f"{existing} {map_result['trackCharacteristics']}".strip()
-                    )
+                    track_model = merge_map_analysis(track_model, map_result)
 
                 progress.progress(65)
             elif map_data and not has_openai:
@@ -271,49 +266,77 @@ Return JSON:
 }}"""
                 )
 
-                # Merge guide corners with existing corners
-                guide_corners = guide_result.get('corners', [])
-                if guide_corners and not track_model['corners']:
-                    track_model['corners'] = guide_corners
-                elif guide_corners and track_model['corners']:
-                    # Enrich existing corners with guide-specific notes
-                    for gc in guide_corners:
-                        for ec in track_model['corners']:
-                            if ec.get('number') == gc.get('number'):
-                                ec['guideNotes'] = gc.get('notes', '')
-                                # Guide corner names are often more accurate
-                                if gc.get('name'):
-                                    ec['name'] = gc['name']
+                track_model = merge_guide_data(track_model, guide_result)
 
-                if guide_result.get('trackDirection') and not track_model.get('trackDirection'):
-                    track_model['trackDirection'] = guide_result['trackDirection']
-                if guide_result.get('trackCharacteristics'):
-                    existing = track_model.get('trackCharacteristics', '')
-                    track_model['trackCharacteristics'] = (
-                        f"{existing} {guide_result['trackCharacteristics']}".strip()
-                    )
-
-            # ── Save track model ──────────────────────────────
+            # ── Save track model (the app learns) ─────────────
             st.session_state['track_model'] = track_model
+            save_track(track_model)
             progress.progress(100)
             n_corners = len(track_model.get('corners', []))
-            status.update(label=f"Track model built: {n_corners} corners identified", state="complete")
+            status.update(label=f"Track model built: {n_corners} corners — saved to local knowledge", state="complete")
 
         except Exception as e:
             st.error(f"Track analysis failed: {e}")
 
-# Display track model if it exists
+# ── Display and Edit Track Model ──────────────────────────
 track_model = st.session_state.get('track_model')
 if track_model and track_model.get('corners') and not track_model.get('skipped'):
-    st.markdown(f"**Track Model: {len(track_model['corners'])} corners identified**")
+    n_corners = len(track_model['corners'])
+    left_count = sum(1 for c in track_model['corners'] if c.get('direction') == 'left')
+    right_count = n_corners - left_count
+    source_tag = ""
+    if track_model.get('prebuilt'):
+        source_tag = " (verified)"
+    elif track_model.get('_lastSaved'):
+        source_tag = " (saved)"
+
+    st.markdown(f"**Track Model: {n_corners} corners ({left_count}L, {right_count}R){source_tag}**")
     if track_model.get('trackCharacteristics'):
         st.caption(track_model['trackCharacteristics'])
 
+    # ── Enrichment options ────────────────────────────────
+    enrich_col1, enrich_col2 = st.columns(2)
+    with enrich_col1:
+        if st.button("🌐 Enrich with AI Research", help="Run AI web research and merge new info into existing data"):
+            with st.spinner("Running AI research to enrich track data..."):
+                try:
+                    research_result = api.research_track(track_name)
+                    enriched = merge_ai_research(track_model, research_result)
+                    st.session_state['track_model'] = enriched
+                    save_track(enriched)
+                    st.success(f"AI research merged — enriched with new details")
+                    st.rerun()
+                except Exception as e:
+                    st.warning(f"AI research issue: {e}")
+    with enrich_col2:
+        map_data = st.session_state.get('track_map')
+        has_openai = bool(st.session_state.get('openai_key', ''))
+        if map_data and has_openai:
+            if st.button("🗺️ Enrich with Track Map", help="Re-analyze track map and merge visual targets"):
+                with st.spinner("Analyzing track map..."):
+                    try:
+                        map_bytes = map_data.getvalue()
+                        map_b64 = base64.b64encode(map_bytes).decode()
+                        map_result = api.analyze_track_map(
+                            map_b64, track_name,
+                            existing_corners=track_model.get('corners')
+                        )
+                        enriched = merge_map_analysis(track_model, map_result)
+                        st.session_state['track_model'] = enriched
+                        save_track(enriched)
+                        st.success("Track map data merged")
+                        st.rerun()
+                    except Exception as e:
+                        st.warning(f"Map analysis issue: {e}")
+
+    # ── Editable corner list ──────────────────────────────
     for c in track_model['corners']:
-        name = c.get('name', f"Corner {c.get('number', '?')}")
+        c_num = c.get('number', '?')
+        name = c.get('name', f"Corner {c_num}")
         direction = c.get('direction', '')
         severity = c.get('severity', '')
-        with st.expander(f"Corner {c.get('number', '?')}: {name} ({direction} {severity})"):
+        edited_tag = " ✏️" if c.get('_userEdited') else ""
+        with st.expander(f"Corner {c_num}: {name} ({direction} {severity}){edited_tag}"):
             vt = c.get('visual_targets', {})
             if vt:
                 st.markdown(f"**Braking target:** {vt.get('braking', '—')}")
@@ -322,6 +345,71 @@ if track_model and track_model.get('corners') and not track_model.get('skipped')
             notes = c.get('notes', c.get('guideNotes', ''))
             if notes:
                 st.markdown(f"*{notes}*")
+
+            # Edit controls
+            st.markdown("---")
+            st.caption("Edit this corner:")
+            edit_cols = st.columns(3)
+            new_name = edit_cols[0].text_input("Name", value=name, key=f"edit_name_{c_num}")
+            new_dir = edit_cols[1].selectbox(
+                "Direction",
+                options=['left', 'right'],
+                index=0 if direction == 'left' else 1,
+                key=f"edit_dir_{c_num}"
+            )
+            new_sev = edit_cols[2].selectbox(
+                "Severity",
+                options=['kink', 'fast_sweeper', 'medium', 'tight', 'hairpin'],
+                index=['kink', 'fast_sweeper', 'medium', 'tight', 'hairpin'].index(severity)
+                    if severity in ['kink', 'fast_sweeper', 'medium', 'tight', 'hairpin'] else 2,
+                key=f"edit_sev_{c_num}"
+            )
+            new_notes = st.text_area("Notes", value=notes, key=f"edit_notes_{c_num}", height=68)
+
+            save_col, delete_col = st.columns([3, 1])
+            with save_col:
+                if st.button(f"Save Changes", key=f"save_corner_{c_num}"):
+                    updated = update_corner(
+                        st.session_state['track_model'], c_num,
+                        {'name': new_name, 'direction': new_dir, 'severity': new_sev, 'notes': new_notes}
+                    )
+                    st.session_state['track_model'] = updated
+                    save_track(updated)
+                    st.success(f"Corner {c_num} updated and saved")
+                    st.rerun()
+            with delete_col:
+                if st.button(f"🗑️ Remove", key=f"del_corner_{c_num}", type="secondary"):
+                    updated = remove_corner(st.session_state['track_model'], c_num)
+                    st.session_state['track_model'] = updated
+                    save_track(updated)
+                    st.rerun()
+
+    # ── Add new corner ────────────────────────────────────
+    with st.expander("➕ Add a new corner"):
+        add_cols = st.columns(3)
+        add_num = add_cols[0].number_input("Corner number", min_value=1, max_value=30, value=n_corners + 1, key="add_num")
+        add_name = add_cols[1].text_input("Name", placeholder="e.g. Turn 12 – Chicane", key="add_name")
+        add_dir = add_cols[2].selectbox("Direction", options=['left', 'right'], key="add_dir")
+        add_cols2 = st.columns(2)
+        add_sev = add_cols2[0].selectbox("Severity", options=['kink', 'fast_sweeper', 'medium', 'tight', 'hairpin'], key="add_sev")
+        add_notes = add_cols2[1].text_input("Notes", placeholder="Racing line info, landmarks...", key="add_notes")
+        if st.button("Add Corner"):
+            if add_name:
+                new_corner = {
+                    'number': add_num,
+                    'name': add_name,
+                    'direction': add_dir,
+                    'severity': add_sev,
+                    'notes': add_notes,
+                    '_userEdited': True,
+                }
+                updated = add_corner(st.session_state['track_model'], new_corner)
+                st.session_state['track_model'] = updated
+                save_track(updated)
+                st.success(f"Corner {add_num} added")
+                st.rerun()
+            else:
+                st.warning("Give the corner a name")
 
 
 # ═══════════════════════════════════════════════════════════
